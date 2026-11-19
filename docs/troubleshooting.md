@@ -21,3 +21,5 @@ and `Resume`.
 
 **Screenshots**: hold the status bar (Home or a book). Files go to
 `koreader/screenshots/`.
+
+**Still stuck?** Ask in [Discussions](https://github.com/truonglong88/Minimal-Home-Interface-for-Kindle/discussions) (no promise of a reply).

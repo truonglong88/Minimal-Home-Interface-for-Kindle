@@ -14,8 +14,10 @@ sizes scale to any screen KOReader runs on.
 the plugin looks very close, but not pixel for pixel the same.</sub>
 
 > **Source published, contributions not accepted.** This is a personal project,
-> shared as-is. Pull requests and issues are not reviewed. You are welcome to
-> fork it and change anything you like under the [license](#license).
+> shared as-is. Found a bug or have an idea? Post it in
+> [Discussions](https://github.com/truonglong88/Minimal-Home-Interface-for-Kindle/discussions): it's read, but there is no promise of a fix or a reply.
+> Pull requests are not accepted. You are welcome to fork it and change
+> anything you like under the [license](#license).
 
 ## Who is this for
 
@@ -117,6 +119,15 @@ not covered by this project's license. If you fork or redistribute this project,
 replace them with images you have the right to share
 (`tools/prepare-screensaver.py` turns any picture into a screen-sized grayscale
 image). See [docs/images/NOTICE.md](docs/images/NOTICE.md).
+
+## Feedback
+
+- **Bug reports, ideas, questions:** [Discussions](https://github.com/truonglong88/Minimal-Home-Interface-for-Kindle/discussions). For a bug, say which
+  device, KOReader version and Minimal Home version (shown at the bottom of
+  Settings), what you did and what happened; a screenshot helps (hold the status
+  bar). Lines with `MinimalHome` from `koreader/crash.log` help most.
+- No promise of fixes, replies or new features: this is a personal project.
+- Issues are off and pull requests are closed automatically; forks are welcome.
 
 ## Development
 

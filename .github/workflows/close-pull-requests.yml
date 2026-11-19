@@ -19,4 +19,4 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
         run: |
-          gh pr close "$PR" --repo "$REPO" --comment "Thanks! This project doesn't accept contributions (see CONTRIBUTING.md), but you're welcome to fork it and change it under the AGPL-3.0 license."
+          gh pr close "$PR" --repo "$REPO" --comment "Thanks! This project doesn't accept pull requests (see CONTRIBUTING.md). For bugs and ideas, please use Discussions: https://github.com/truonglong88/Minimal-Home-Interface-for-Kindle/discussions. You're welcome to fork it and change it under the AGPL-3.0 license."
