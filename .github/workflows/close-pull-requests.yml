@@ -1,0 +1,22 @@
+name: Close pull requests
+
+# This project doesn't take contributions (see CONTRIBUTING.md): close new pull
+# requests with a short note. Forks are welcome.
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close with a note
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh pr close "$PR" --repo "$REPO" --comment "Thanks! This project doesn't accept contributions (see CONTRIBUTING.md), but you're welcome to fork it and change it under the AGPL-3.0 license."

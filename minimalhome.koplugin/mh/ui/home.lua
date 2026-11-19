@@ -1,0 +1,922 @@
+--[[--
+The Library home screen.
+
+Status bar on top; below it one scrolling column: header (title, search,
+settings) · hero (currently reading / what's next) · recent · all books.
+
+E-ink smears when content follows the finger, so a swipe scrolls by the
+distance swiped and the screen is redrawn once, when the finger lifts.
+--]]
+
+local Device = require("device")
+local Geom = require("ui/geometry")
+local GestureRange = require("ui/gesturerange")
+local HorizontalGroup = require("ui/widget/horizontalgroup")
+local InputContainer = require("ui/widget/container/inputcontainer")
+local OverlapGroup = require("ui/widget/overlapgroup")
+local UIManager = require("ui/uimanager")
+local time = require("ui/time")
+local VerticalGroup = require("ui/widget/verticalgroup")
+local logger = require("logger")
+local Screen = Device.screen
+
+local C = require("mh/ui/components")
+local Library = require("mh/data/library")
+local Model = require("mh/data/model")
+local Prefs = require("mh/data/prefs")
+local Theme = require("mh/theme")
+local Viewport = require("mh/ui/viewport")
+
+local px = Theme.px
+
+-- Layers paint bottom to top, but hand taps to the topmost layer first, so a
+-- button floating over the list (Back to top) is never "seen through".
+local Layers = OverlapGroup:extend{}
+function Layers:propagateEvent(event)
+    for i = #self, 1, -1 do
+        if self[i]:handleEvent(event) then return true end
+    end
+    return false
+end
+
+local Home = InputContainer:extend{
+    name = "MinimalHome",
+    ui = nil,          -- the FileManager instance
+    on_close = nil,
+}
+
+function Home:init()
+    self.covers_fullscreen = true
+    -- a drag that started on the book (swipe up to Home) must not scroll the list
+    self.calm_until = time.now() + time.s(1)
+    self.col = Theme.boldColors(false)
+    self.dimen = Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Screen:getHeight() }
+
+    if Device:isTouchDevice() then
+        local range = function() return self.dimen end
+        self.ges_events.MHSwipe = { GestureRange:new{ ges = "swipe", range = range } }
+        self.ges_events.MHPan = { GestureRange:new{ ges = "pan", range = range } }
+        self.ges_events.MHPanRelease = { GestureRange:new{ ges = "pan_release", range = range } }
+        -- long-press the clock / battery strip: screenshot
+        self.ges_events.MHShot = { GestureRange:new{ ges = "hold", range = function()
+            return Geom:new{ x = 0, y = 0, w = self.dimen.w, h = self.view_top or px(140) }
+        end } }
+    end
+    if Device:hasKeys() then
+        self.key_events.MHNextPage = { { Device.input.group.PgFwd } }
+        self.key_events.MHPrevPage = { { Device.input.group.PgBack } }
+    end
+    self:reload()    self:scheduleClock()
+end
+
+-- Data ------------------------------------------------------------------------
+
+function Home:reload()
+    local ok, err = pcall(function()
+        self.books, self.missing = Library.load(Prefs.booksFolder())
+    end)
+    if not ok then
+        logger.err("MinimalHome: failed to read library:", err)
+        self.books, self.missing = {}, {}
+    end
+    self.state = Model.homeState(self.books)
+    self:resort()
+    self:layout()
+    self:indexMissing()
+end
+
+function Home:resort()
+    self.sort_key = Prefs.get("sort_key")
+    self.sort_asc = Prefs.get("sort_asc")
+    self.sorted = Model.sortBooks(self.books, self.sort_key, self.sort_asc)
+    self.blocks = nil
+end
+
+function Home:indexMissing()
+    if self.indexing or not self.missing or #self.missing == 0 then return end
+    self.indexing = Library.indexInBackground(self.missing, px(340), px(480), UIManager, function()
+        self.indexing = false
+        if self.closed then return end
+        self.books, self.missing = Library.load(Prefs.booksFolder())
+        self.missing = {} -- don't loop on books that can't be indexed
+        self.state = Model.homeState(self.books)
+        self:resort()
+        self:layout()
+        UIManager:setDirty(self, "ui")
+    end)
+end
+
+-- Layout helpers ---------------------------------------------------------------
+
+function Home:contentWidth()
+    return self.dimen.w - 2 * px(Theme.margin_h)
+end
+
+function Home:label(text)
+    return C.text(text, "sans_bold", 32, self.col.muted)
+end
+
+function Home:coverFor(book, w, h, opts)
+    opts = opts or {}
+    opts.colors = self.col
+    opts.frame = self.col.line -- grey frame on every cover, drawn or image
+    if book.has_cover then
+        opts.cover_bb = Library.getCover(book.path)
+    end
+    return C.cover(book, w, h, opts)
+end
+
+function Home:statusBar()
+    return C.statusBar(self:contentWidth(), self.col, 36, true, true)
+end
+
+function Home:header()
+    local w = self:contentWidth()
+    local search_w, btn = px(520), px(112)
+    local gap = px(24)
+    local title_w = w - search_w - btn - 2 * gap
+    local title = C.text("Library", "serif_bold", 84, self.col.fg, title_w)
+
+    local search = HorizontalGroup:new{
+        align = "center",
+        C.icon("appbar.search", px(44)),
+        C.space(px(18), 1),
+        C.text("Search books…", "sans_medium", 36, self.col.muted, search_w - px(44 + 18 + 52)),
+    }
+    local search_box = C.tappable(
+        C.box(search_w, btn, search, { border = px(4), border_color = self.col.fg, radius = px(10),
+            pad_l = px(26), valign = "center" }),
+        function() self:openSearch() end)
+    local settings_box = C.tappable(
+        C.box(btn, btn, C.slidersIcon(px(64), self.col.fg, self.col.bg), { border = px(4), border_color = self.col.fg,
+            radius = px(10), halign = "center", valign = "center" }),
+        function() self:openSettings() end)
+
+    return HorizontalGroup:new{
+        align = "center",
+        C.box(title_w, btn, title, { valign = "center" }),
+        C.space(gap, 1), search_box, C.space(gap, 1), settings_box,
+    }
+end
+
+Home.BUTTON_H = 124 -- design px
+Home.TRACK = require("ffi/blitbuffer").gray(0.2) -- #CCCCCC, unread part of the hero progress bar
+
+-- Hero: the big "Currently reading" / "What's next?" block.
+function Home:hero(book, opts)
+    local w = self:contentWidth()
+    local cover_w, cover_h, gap = px(360), px(510), px(56)
+    local col_w = w - cover_w - gap
+    local cover = C.tappable(self:coverFor(book, cover_w, cover_h,
+        { style_index = 1, title_size = 52, author_size = 28, border = px(3), radius = px(12) }),
+        function() self:openBook(book.path) end)
+
+    local top = VerticalGroup:new{ align = "left" }
+    if opts.subline then
+        table.insert(top, C.text(opts.subline, "sans_medium", 30, self.col.muted, col_w))
+        table.insert(top, C.space(1, px(14)))
+    end
+    local title = C.textbox(book.title, "serif_bold", 62, self.col.fg, col_w, 3, 0.1)
+    table.insert(top, title)
+    if book.authors then
+        table.insert(top, C.space(1, px(14)))
+        table.insert(top, C.text(book.authors, "sans_medium", 40, self.col.muted, col_w))
+    end
+
+    local middle = VerticalGroup:new{ align = "left" }
+    if opts.meta and opts.meta ~= "" then
+        middle = VerticalGroup:new{ align = "left", C.text(opts.meta, "sans_medium", 34, self.col.muted, col_w) }
+    end
+    if Model.isInProgress(book) then
+        -- progress bar, then one line under it: time left on the left, % on the right
+        local pct_w = C.text(Model.percentInt(book) .. "%", "sans_bold", 36, self.col.muted)
+        local pw, ph = pct_w:getSize().w, pct_w:getSize().h
+        local left = Model.bookTimeLeft(book, Library.secondsPerPage(book.path))
+        local line = OverlapGroup:new{ dimen = Geom:new{ w = col_w, h = ph } }
+        if left then
+            local lt = C.text(left, "sans_medium", 34, self.col.muted, col_w - pw - px(24))
+            table.insert(line, C.box(lt:getSize().w, ph, lt, { valign = "center" }))
+        end
+        table.insert(line, C.box(pw, ph, pct_w, { overlap_align = "right" }))
+        middle = VerticalGroup:new{
+            align = "left",
+            C.progress(col_w, px(16), book.percent or 0, Home.TRACK, self.col.fg, px(8)),
+            C.space(1, px(22)),
+            line,
+        }
+    end
+
+    local button_label = opts.button or "Continue reading"
+    local button = C.tappable(
+        C.box(col_w, px(Home.BUTTON_H), C.text(button_label .. "  →", "sans_bold", 42, self.col.bg),
+            { bg = self.col.fg, radius = px(10), halign = "center", valign = "center" }),
+        function() self:openBook(book.path) end)
+
+    -- The column is exactly as tall as the cover: title block at the top, button at
+    -- the bottom, progress in the middle (design: flex column, space-between).
+    local pad_v = px(6)
+    local min_gap = px(24)
+    local function spare()
+        return cover_h - 2 * pad_v - top:getSize().h - middle:getSize().h - px(Home.BUTTON_H)
+    end
+    if spare() < 2 * min_gap then
+        -- long title: keep it to two lines so the progress block can breathe
+        local idx
+        for i, child in ipairs(top) do if child == title then idx = i end end
+        title:free()
+        title = C.textbox(book.title, "serif_bold", 62, self.col.fg, col_w, 2, 0.1)
+        top[idx] = title
+        top:resetLayout()
+    end
+    local room = math.max(0, spare())
+    local column = VerticalGroup:new{
+        align = "left",
+        C.space(1, pad_v),
+        top,
+        C.space(1, math.floor(room / 2)),
+        middle,
+        C.space(1, room - math.floor(room / 2)),
+        button,
+    }
+    return HorizontalGroup:new{ align = "top", cover, C.space(gap, 1), column }
+end
+
+--- No books in the folder yet (design: "Home – no books").
+function Home:emptyLibrary()
+    local w = self:contentWidth()
+    local text_w = math.min(w, px(900))
+    local g = VerticalGroup:new{
+        align = "center",
+        C.text("No books yet", "serif_bold", 64, self.col.fg, w),
+        C.space(1, px(28)),
+        C.textbox("Connect your Kindle to a computer and copy EPUB or PDF files into its documents folder. "
+            .. "They show up here the next time Home opens.", "sans_medium", 36, self.col.muted, text_w, 5, 0.3, "center"),
+    }
+    return C.box(w, g:getSize().h, g, { halign = "center" })
+end
+
+function Home:finishedBanner(book)
+    local w = self:contentWidth()
+    local check = C.text("✓", "sans_bold", 40, self.col.fg)
+    local lead = C.text("Just finished ", "sans_medium", 34, self.col.fg)
+    local title_max = w - px(56) - check:getSize().w - px(18) - lead:getSize().w
+    local row = HorizontalGroup:new{
+        align = "center",
+        check, C.space(px(18), 1), lead,
+        C.text(book.title, "sans_bold", 34, self.col.fg, title_max),
+    }
+    return C.box(w, px(104), row, { border = px(4), border_color = self.col.fg, radius = px(10),
+        pad_l = px(30), valign = "center" })
+end
+
+function Home:startNewCards(list)
+    local w = self:contentWidth()
+    local gap = px(40)
+    local card_w = math.floor((w - gap) / 2)
+    local cover_w, cover_h = px(132), px(192)
+    local text_w = card_w - 2 * px(24) - cover_w - px(28)
+    local row = HorizontalGroup:new{ align = "top" }
+    for i, b in ipairs(list) do
+        local texts = VerticalGroup:new{
+            align = "left",
+            C.textbox(b.title, "serif_bold", 38, self.col.fg, text_w, 2, 0.1),
+            C.space(1, px(8)),
+            C.text(b.authors or "", "sans_medium", 30, self.col.muted, text_w),
+            C.space(1, px(8)),
+            C.text(Model.whenLabel(b), "sans_medium", 26, self.col.muted, text_w),
+        }
+        local inner = HorizontalGroup:new{
+            align = "center",
+            self:coverFor(b, cover_w, cover_h, { compact = true, title_size = 22, border = px(2), radius = px(8), style_index = i + 1 }),
+            C.space(px(28), 1),
+            texts,
+        }
+        local card = C.tappable(C.box(card_w, cover_h + 2 * px(24), inner, { border = px(3),
+            border_color = self.col.line, radius = px(12), pad_l = px(24), valign = "center" }),
+            function() self:openBook(b.path) end)
+        if i > 1 then table.insert(row, C.space(gap, 1)) end
+        table.insert(row, card)
+    end
+    return row
+end
+
+function Home:recentRow(list)
+    local w = self:contentWidth()
+    local gap = px(40)
+    local col_w = math.floor((w - 3 * gap) / 4)
+    local cover_h = px(350)
+    local row = HorizontalGroup:new{ align = "top" }
+    for i, b in ipairs(list) do
+        local status = Model.shortStatus(b)
+        local item = VerticalGroup:new{
+            align = "left",
+            self:coverFor(b, col_w, cover_h, { style_index = i + 1, title_size = 34, author_size = 20, border = px(3), radius = px(10) }),
+            C.space(1, px(18)),
+            C.textbox(b.title, "sans_bold", 32, self.col.fg, col_w, 2, 0.15),
+            C.space(1, px(6)),
+            C.text(status, "sans_medium", 28, self.col.muted, col_w),
+        }
+        if i > 1 then table.insert(row, C.space(gap, 1)) end
+        table.insert(row, C.tappable(item, function() self:openBook(b.path) end))
+    end
+    return row
+end
+
+Home.ROW_H = 296 -- design px, without the divider
+Home.LINE = 3   -- divider thickness, design px
+function Home:bookRow(b, index)
+    local w = self:contentWidth()
+    local cover_w, cover_h = px(148), px(216)
+    local gap = px(40)
+    local col_w = w - cover_w - gap
+
+    local when = C.text(Model.whenLabel(b), "sans_medium", 30, self.col.muted)
+    local title = C.text(b.title, "serif_bold", 44, self.col.fg, col_w - when:getSize().w - px(24))
+    local line1 = OverlapGroup:new{
+        dimen = Geom:new{ w = col_w, h = title:getSize().h },
+        title,
+        C.box(when:getSize().w, title:getSize().h, when, { valign = "center" }),
+    }
+    line1[2].overlap_align = "right"
+
+    local meta = C.text(Model.metaLine(b), "sans_medium", 30, self.col.muted)
+    local line3 = OverlapGroup:new{ dimen = Geom:new{ w = col_w, h = meta:getSize().h }, meta }
+    if b.kindle_only then
+        -- KOReader can't read it: say so in the list (design: "KINDLE ONLY" tag)
+        local t = C.text("KINDLE ONLY", "sans_bold", 24, self.col.fg)
+        local tag = C.box(t:getSize().w + 2 * px(16), px(52), t, { border = px(3), border_color = self.col.fg,
+            radius = px(8), halign = "center", valign = "center" })
+        tag.overlap_align = "right"
+        line3.dimen.h = math.max(line3.dimen.h, px(52))
+        table.insert(line3, tag)
+    elseif Model.isFinished(b) then
+        local done = C.text("✓ Finished", "sans_medium", 30, self.col.muted)
+        done.overlap_align = "right"
+        table.insert(line3, done)
+    end
+
+    local texts = VerticalGroup:new{ align = "left", line1, C.space(1, px(10)) }
+    -- no author: the file type / pages line moves up under the title
+    local authors = b.authors and b.authors:match("%S") and b.authors
+    if authors then
+        table.insert(texts, C.text(authors, "sans_medium", 34, self.col.muted, col_w))
+        table.insert(texts, C.space(1, px(10)))
+    end
+    table.insert(texts, line3)
+    if Model.isInProgress(b) and b.percent then
+        table.insert(texts, C.space(1, px(18)))
+        table.insert(texts, HorizontalGroup:new{
+            align = "center",
+            C.progress(px(300), px(12), b.percent, Home.TRACK, self.col.fg, px(6)),
+            C.space(px(20), 1),
+            C.text(Model.percentInt(b) .. "%", "sans_bold", 30, self.col.muted),
+        })
+    end
+
+    -- text column starts at the top of the cover, whatever its length
+    local content = HorizontalGroup:new{
+        align = "top",
+        self:coverFor(b, cover_w, cover_h, { compact = true, title_size = 23, border = px(2), radius = px(8), style_index = index }),
+        C.space(gap, 1),
+        texts,
+    }
+    return VerticalGroup:new{
+        align = "left",
+        C.hline(w, px(Home.LINE), self.col.line),
+        C.tappable(C.box(w, px(Home.ROW_H), content, { valign = "center" }),
+            function() self:openBook(b.path) end,
+            function() UIManager:nextTick(function() self:confirmDelete(b) end) end),
+    }
+end
+
+--- Hold a book in All books: delete it from the Kindle, after asking.
+function Home:confirmDelete(b)
+    require("mh/ui/confirm").show{
+        title = "Delete this book?",
+        text = "“" .. (b.title or "") .. "” will be removed from this Kindle, with its reading progress and highlights. "
+            .. "This can’t be undone.",
+        ok_text = "Delete",
+        ok_callback = function()
+            UIManager:nextTick(function()
+                if require("mh/device").deleteBook(self.ui, b.path) then
+                    if not self.closed then
+                        -- stay where we were: the books below move up into the gap
+                        self._keep_scroll = self.viewport and self.viewport.scroll or 0
+                        self:reload()
+                        UIManager:setDirty(self, "ui")
+                    end
+                    require("mh/ui/snackbar").show("Book deleted")
+                else
+                    require("mh/ui/snackbar").show("Couldn’t delete this book")
+                end
+            end)
+        end,
+    }
+end
+
+function Home:allBooksHeader()
+    local w = self:contentWidth()
+    local label = self:label("ALL BOOKS · " .. #self.books)
+    local sort_text = C.text(Model.sortLabel(self.sort_key, self.sort_asc) .. "  ⌄", "sans_bold", 34, self.col.fg)
+    local h = px(76)
+    local sort = C.tappable(C.box(sort_text:getSize().w, h, sort_text, { valign = "center" }),
+        function() self:showSortMenu() end)
+    self.sort_button = sort
+    sort.overlap_align = "right"
+    return OverlapGroup:new{
+        dimen = Geom:new{ w = w, h = h },
+        C.box(label:getSize().w, h, label, { valign = "center" }),
+        sort,
+    }
+end
+
+-- Screen assembly -----------------------------------------------------------------
+--
+-- Everything below the status bar is one tall column of blocks (header, hero,
+-- recent, the "All books" header, one block per book) shown through a Viewport.
+-- Swipes scroll the column by the distance swiped; the screen is redrawn once,
+-- when the finger lifts, which keeps e-ink clean.
+
+function Home:topBlocks()
+    local s = self.state
+    local blocks = {}
+    local function block(space_before, build)
+        blocks[#blocks + 1] = function()
+            return VerticalGroup:new{ align = "left", C.space(1, px(space_before)), build() }
+        end
+    end
+
+    block(44, function() return self:header() end)
+
+    if s.mode == "empty" then
+        block(200, function() return self:emptyLibrary() end)
+        return blocks, false
+    end
+
+    if s.mode == "finished" then
+        block(48, function() return self:finishedBanner(s.just_finished) end)
+    end
+
+    if s.hero then
+        local label, subline, button
+        if s.mode == "reading" then
+            label = "CURRENTLY READING"
+        elseif s.mode == "finished" then
+            label = "WHAT’S NEXT?"
+            if s.hero_is_new then
+                subline, button = "New · " .. Model.whenLabel(s.hero):lower(), "Start reading"
+            else
+                subline = "In progress · opened " .. Model.whenLabel(s.hero):lower()
+            end
+        else
+            label = "START READING"
+            button = Model.isOpened(s.hero) and "Continue reading" or "Start reading"
+            if not Model.isOpened(s.hero) then
+                subline = "New · " .. Model.whenLabel(s.hero):lower()
+            end
+        end
+        -- a book not started yet: format and length where the progress would be
+        local meta = not Model.isInProgress(s.hero) and Model.metaLine(s.hero) or nil
+        local hero_path = s.hero.path
+        block(60, function()
+            -- the whole block (label, cover, title, progress, button) opens the book
+            return C.tappable(VerticalGroup:new{
+                align = "left",
+                self:label(label), C.space(1, px(28)),
+                self:hero(s.hero, { subline = subline, button = button, meta = meta }),
+            }, function() self:openBook(hero_path) end)
+        end)
+    end
+
+    if s.mode == "finished" and #s.start_new > 0 then
+        block(64, function()
+            return VerticalGroup:new{
+                align = "left",
+                self:label("OR START SOMETHING NEW"), C.space(1, px(28)),
+                self:startNewCards(s.start_new),
+            }
+        end)
+    end
+
+    if #s.recent > 0 then
+        block(76, function()
+            return VerticalGroup:new{
+                align = "left",
+                self:label("RECENT"), C.space(1, px(28)),
+                self:recentRow(s.recent),
+            }
+        end)
+    end
+    return blocks, true
+end
+
+function Home:listHeaderBlock(space_before)
+    return VerticalGroup:new{
+        align = "left",
+        C.space(1, px(space_before)),
+        self:allBooksHeader(),
+        C.space(1, px(18)),
+    }
+end
+
+--- Work out which blocks go on which page. Heights are measured once.
+function Home:buildColumn()
+    local blocks = {}
+    local y = 0
+    local function add(build, h)
+        if not h then
+            local w = build()
+            h = w:getSize().h
+            w:free()
+        end
+        blocks[#blocks + 1] = { y = y, h = h, build = build }
+        y = y + h
+    end
+
+    local builders, has_list = self:topBlocks()
+    for _, build in ipairs(builders) do add(build) end
+    if has_list and #self.sorted > 0 then
+        local space = #builders > 1 and 88 or 48
+        self.list_header_y = y + px(space)
+        add(function() return self:listHeaderBlock(space) end)
+        local row_h = px(Home.ROW_H) + px(Home.LINE)
+        for i = 1, #self.sorted do
+            add(function() return self:bookRow(self.sorted[i], i) end, row_h)
+        end
+        add(function() return C.hline(self:contentWidth(), px(Home.LINE), self.col.line) end, px(Home.LINE))
+    end
+    -- room at the end so the last book clears the "Back to top" button
+    add(function() return C.space(1, px(220)) end, px(220))
+    return blocks
+end
+
+function Home:layout()
+    local keep_scroll = self.viewport and self.viewport.scroll or 0
+    if self[1] then self[1]:free() end
+    local status = self:statusBar()
+    -- small gap so scrolled content never touches the status bar
+    local view_top = px(Theme.margin_top) + status:getSize().h + px(12)
+    self.view_top = view_top
+    if not self.blocks then
+        self.blocks = self:buildColumn()
+        -- a new column starts at the top, unless asked to stay put (after deleting a book)
+        keep_scroll = self._keep_scroll or 0
+    end
+    self._keep_scroll = nil
+    self.viewport = Viewport:new{
+        x = 0, y = view_top, w = self.dimen.w, h = self.dimen.h - view_top,
+        content_x = px(Theme.margin_h),
+        blocks = self.blocks,
+        bg = self.col.bg,
+    }
+    self.viewport.scroll = -1
+    self.viewport:scrollTo(keep_scroll)
+    if self.viewport.scroll < 0 then self.viewport.scroll = 0; self.viewport:update() end
+
+    self.chrome = OverlapGroup:new{ dimen = Geom:new{ w = self.dimen.w, h = self.dimen.h } }
+    local status_box = C.box(self.dimen.w, view_top, status, { bg = self.col.bg,
+        pad_l = px(Theme.margin_h), pad_t = px(Theme.margin_top) })
+    -- small grabber at the top edge: the quick panel pulls down from here
+    local grabber = C.Rect:new{ w = px(120), h = px(8), color = self.col.line, radius = px(4),
+        overlap_offset = { math.floor(self.dimen.w / 2) - px(60), px(18) } }
+    self[1] = Layers:new{
+        dimen = Geom:new{ w = self.dimen.w, h = self.dimen.h },
+        OverlapGroup:new{ dimen = Geom:new{ w = self.dimen.w, h = view_top }, status_box, grabber },
+        self.viewport,
+        self.chrome,
+    }
+    self._status_box = status_box
+    self.viewport.overlap_offset = { 0, view_top }
+    self.status_box = self._status_box
+    self:updateChrome()
+end
+
+-- Clock and battery ----------------------------------------------------------------
+--
+-- The home screen is painted once and then left alone, so the clock would freeze.
+-- Redraw the status bar on every minute change, and right after waking up.
+
+function Home:refreshStatus()
+    if self.closed or not self.status_box then return end
+    local old = self.status_box[1]
+    self.status_box[1] = self:statusBar()
+    if old then old:free() end
+    UIManager:setDirty(self, "ui", Geom:new{ x = 0, y = 0, w = self.dimen.w, h = self.view_top })
+end
+
+function Home:scheduleClock()
+    if not self._clock_tick then
+        self._clock_tick = function()
+            self:refreshStatus()
+            self:scheduleClock()
+        end
+    end
+    UIManager:unschedule(self._clock_tick)
+    if self.closed then return end
+    local sec = tonumber(os.date("%S")) or 0
+    UIManager:scheduleIn(60 - sec + 0.2, self._clock_tick)
+end
+
+function Home:onResume()
+    self:refreshStatus()
+    self:scheduleClock()
+end
+
+-- Wi-Fi turned on or off: show or hide its icon.
+function Home:onNetworkConnected() self:refreshStatus() end
+function Home:onNetworkDisconnected() self:refreshStatus() end
+-- Charger plugged in or out: the bolt on the battery.
+function Home:onCharging() self:refreshStatus() end
+function Home:onNotCharging() self:refreshStatus() end
+
+function Home:onSuspend()
+    if self._clock_tick then UIManager:unschedule(self._clock_tick) end
+end
+
+-- Scrollbar and "Back to top": only once the user has scrolled.
+function Home:updateChrome()
+    local chrome = self.chrome
+    for i = #chrome, 1, -1 do chrome[i] = nil end
+    local vp = self.viewport
+    if vp.scroll > 0 and vp:maxScroll() > 0 then
+        table.insert(chrome, self:scrollbar())
+    end
+    if vp.scroll > vp.h * 0.6 then
+        table.insert(chrome, self:backToTop())
+    end
+end
+
+function Home:scrollbar()
+    local vp = self.viewport
+    local top, bottom = px(160), px(48)
+    local track_h = self.dimen.h - top - bottom
+    local total = vp:totalHeight()
+    local thumb_h = math.max(px(100), math.floor(track_h * vp.h / total))
+    local y = math.floor((track_h - thumb_h) * vp.scroll / math.max(1, vp:maxScroll()))
+    local bar = OverlapGroup:new{
+        dimen = Geom:new{ w = px(12), h = track_h },
+        C.Rect:new{ w = px(6), h = track_h, color = Home.TRACK, radius = px(3), overlap_offset = { px(3), 0 } },
+        C.Rect:new{ w = px(12), h = thumb_h, color = self.col.fg, radius = px(6), overlap_offset = { 0, y } },
+    }
+    bar.overlap_offset = { self.dimen.w - px(26) - px(12), top }
+    return bar
+end
+
+function Home:backToTop()
+    local label = C.text("↑  Back to top", "sans_bold", 36, self.col.fg)
+    local w = label:getSize().w + 2 * px(44)
+    local h = px(112)
+    local btn = C.tappable(
+        C.box(w, h, label, { bg = self.col.bg, border = px(4), border_color = self.col.fg,
+            radius = math.floor(h / 2), halign = "center", valign = "center" }),
+        function() self:scrollTo(0) end)
+    btn.overlap_offset = { self.dimen.w - px(Theme.margin_h) - w, self.dimen.h - px(64) - h }
+    return btn
+end
+
+--- Once the list is scrolled, a grey line separates the fixed status bar (as in Settings).
+function Home:paintTo(bb, x, y)
+    InputContainer.paintTo(self, bb, x, y)
+    if self.viewport and (self.viewport.scroll or 0) > 0 and self.view_top then
+        local t = px(4)
+        bb:paintRect(x, y + self.view_top - t, self.dimen.w, t, self.col.line)
+    end
+end
+
+-- Scrolling ------------------------------------------------------------------------
+
+Home.FLICK = 1.5 -- a quick swipe travels a bit further than the finger did
+
+function Home:scrollTo(offset)
+    if self.viewport:scrollTo(offset) then
+        self:updateChrome()
+        UIManager:setDirty(self, "ui")
+    end
+end
+
+function Home:scrollBy(dy)
+    self:scrollTo(self.viewport.scroll + dy)
+end
+
+-- A drag or flick down that starts on the status bar opens the quick panel.
+Home.PULL_MIN = 100 -- design px the finger must travel
+
+function Home:startsOnStatusBar(y)
+    return y and y < (self.view_top or px(140))
+end
+
+-- Slow drag: remember how far the finger has moved, scroll once on release.
+function Home:calm()
+    return time.now() < self.calm_until
+end
+
+function Home:onMHPan(_, ges)
+    if self._swallow or (not self._pan_dy and self:calm()) then
+        self._swallow = true
+        return true
+    end
+    if ges and ges.relative then
+        if not self._pan_dy and ges.pos then self._pan_start_y = ges.pos.y - ges.relative.y end
+        self._pan_dy = ges.relative.y
+    end
+    return true
+end
+
+function Home:onMHPanRelease()
+    if self._swallow then
+        self._swallow = nil
+        return true
+    end
+    if self._pan_dy then
+        local dy, start = self._pan_dy, self._pan_start_y
+        self._pan_dy, self._pan_start_y = nil, nil
+        if self:startsOnStatusBar(start) and dy > px(Home.PULL_MIN) then
+            self:showQuickPanel()
+        else
+            self:scrollBy(-dy)
+        end
+    end
+    return true
+end
+
+-- Quick flick.
+function Home:onMHSwipe(_, ges)
+    if self._swallow or self:calm() then
+        self._swallow = nil
+        return true
+    end
+    self._pan_dy = nil
+    local dir = ges and ges.direction
+    if dir == "south" and ges.pos and self:startsOnStatusBar(ges.pos.y) then
+        self:showQuickPanel()
+        return true
+    end
+    local dist = (ges and ges.distance or 0) * Home.FLICK
+    if dir == "north" then
+        self:scrollBy(dist)
+        return true
+    elseif dir == "south" then
+        self:scrollBy(-dist)
+        return true
+    end
+end
+
+-- Page-turn buttons move most of a screen.
+function Home:onMHShot()
+    return require("mh/screenshot").take(self.ui)
+end
+
+function Home:onMHNextPage() self:scrollBy(self.viewport.h * 0.85) return true end
+function Home:onMHPrevPage() self:scrollBy(-self.viewport.h * 0.85) return true end
+
+function Home:showSortMenu()
+    local anchor = self.sort_button and self.sort_button.dimen
+    if not anchor then return end
+    require("mh/ui/sortmenu"):new{
+        anchor = anchor,
+        sort_key = self.sort_key,
+        sort_asc = self.sort_asc,
+        col = self.col,
+        on_rotate = function(mode) self:onSetRotationMode(mode) end,
+        on_pick = function(key, asc)
+            Prefs.set("sort_key", key)
+            Prefs.set("sort_asc", asc)
+            -- stay where we were, but no further down than the top of the list
+            local prev = self.viewport.scroll
+            self:resort()
+            self:layout()
+            if self.list_header_y then
+                self.viewport:scrollTo(math.min(prev, self.list_header_y))
+                self:updateChrome()
+            end
+            UIManager:setDirty(self, "ui")
+        end,
+    }:show()
+end
+
+--- A Kindle Store book KOReader can't read?
+function Home:isKindleOnly(path)
+    for _, b in ipairs(self.books or {}) do
+        if b.path == path then return b.kindle_only end
+    end
+    return false
+end
+
+function Home.showKindleOnly()
+    require("mh/ui/snackbar").show("Open this book in the Kindle reader", 3,
+        "KOReader can’t read this Kindle Store format.")
+end
+
+function Home:openBook(path)
+    if self:isKindleOnly(path) then Home.showKindleOnly() return end
+    if self.opening then return end
+    self.opening = true
+    -- show at once that the tap landed: opening can take a few seconds
+    require("mh/loadingbar").show(0.03, true)
+    require("mh/ui/snackbar").paintNow("Opening book…")
+    -- Leave the tap handler first: closing frees the widgets that are handling it.
+    UIManager:nextTick(function() self:openBookNow(path) end)
+end
+
+--- Close Home and open the reader in one go, so Home is never drawn in between
+--- (also used by Search, which shows the loading bar itself).
+function Home:openBookNow(path)
+    local DocumentRegistry = require("document/documentregistry")
+    -- a check that fails must never stop the book from opening
+    local ok_check, readable = pcall(function()
+        local lfs = require("libs/libkoreader-lfs")
+        return lfs.attributes(path, "mode") == "file" and DocumentRegistry:hasProvider(path)
+    end)
+    if ok_check and not readable then
+        -- stay on Home and say so (KOReader would leave us in its file browser)
+        self.opening = nil
+        require("mh/loadingbar").done()
+        UIManager:setDirty(self, "ui")
+        require("mh/ui/snackbar").show("Couldn’t open this book")
+        return
+    end
+    self.opening = true
+    self:onClose()
+    local provider = DocumentRegistry:getProvider(path, true)
+    local FileManager = require("apps/filemanager/filemanager")
+    if provider and provider.order and FileManager.instance then
+        -- handled by another app or plugin (archives, …): let KOReader decide
+        FileManager.instance:openFile(path)
+    else
+        -- seamless = no "Opening file…" message in the middle of the screen
+        require("apps/reader/readerui"):showReader(path, nil, true)
+    end
+end
+
+function Home:openSearch()
+    local ok, err = pcall(function()
+        require("mh/ui/search"):new{
+            books = self.books,
+            cover_for = function(b, w, h, opts) return self:coverFor(b, w, h, opts) end,
+            on_open = function(path) self:openBookNow(path) end,
+            on_kindle_only = function() Home.showKindleOnly() end,
+        }:show()
+    end)
+    if not ok then
+        logger.err("MinimalHome: search could not open:", err)
+        local fm = self.ui -- fall back to KOReader's file search
+        if fm and fm.filesearcher then fm.filesearcher:onShowFileSearch() end
+    end
+end
+
+function Home:openSettings()
+    require("mh/ui/settings").openPage(self.ui, {
+        on_close = function()
+            if not self.closed then
+                self:refreshStatus()
+                UIManager:setDirty(self, "full")
+            end
+        end,
+        on_library_changed = function()
+            if not self.closed then self:reload() end
+        end,
+    })
+end
+
+function Home:showQuickPanel()
+    local ok, err = pcall(function() require("mh/ui/quickpanel"):new{
+        ui = self.ui,
+        on_settings = function() self:openSettings() end,
+        -- Wi-Fi may have been switched: redraw the status bar icon
+        on_close = function() if not self.closed then self:refreshStatus() end end,
+    }:show() end)
+    if not ok then logger.err("MinimalHome: quick panel failed:", err) end
+end
+
+-- The device was turned (accelerometer) or the user picked a rotation.
+-- KOReader sends this to the top widget only, so we pass it on to the file
+-- browser underneath and lay ourselves out again for the new screen size.
+function Home:onSetRotationMode(mode)
+    if mode == nil then return true end
+    if self.ui and self.ui.onSetRotationMode then
+        self.ui:onSetRotationMode(mode)
+    elseif mode ~= Screen:getRotationMode() then
+        Screen:setRotationMode(mode)
+    end
+    self.dimen = Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Screen:getHeight() }
+    self.blocks = nil
+    self:layout()
+    UIManager:setDirty("all", "full")
+    return true
+end
+
+function Home:onClose()
+    if self.closed then return true end
+    self.closed = true
+    UIManager:close(self)
+    if self.on_close then self.on_close() end
+    return true
+end
+
+function Home:onCloseWidget()
+    self.closed = true
+    if self._clock_tick then UIManager:unschedule(self._clock_tick) end
+    if self[1] then self[1]:free() end
+end
+
+return Home
