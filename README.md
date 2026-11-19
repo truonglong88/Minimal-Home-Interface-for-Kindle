@@ -4,11 +4,11 @@ A calm, minimal home screen and reading screen for e-ink readers running
 [KOReader](https://github.com/koreader/koreader). Designed on a Kindle Oasis 2;
 sizes scale to any screen KOReader runs on.
 
-| Home | Reading | Reading menu |
-|---|---|---|
-| ![Home](docs/images/home.png) | ![Reading](docs/images/reading.png) | ![Reading menu](docs/images/reading-menu.png) |
-| **Quick panel** | **Search** | **Sleeping** |
-| ![Quick panel](docs/images/quick-panel.png) | ![Search](docs/images/search.png) | ![Sleeping](docs/images/sleeping.png) |
+| Home | Reading | Reading menu | Go to page |
+|---|---|---|---|
+| ![Home](docs/images/home.png) | ![Reading](docs/images/reading.png) | ![Reading menu](docs/images/reading-menu.png) | ![Go to page](docs/images/go-to-page.png) |
+| **Search** | **Quick panel** | **Screensaver** | **Sleeping** |
+| ![Search](docs/images/search.png) | ![Quick panel](docs/images/quick-panel.png) | ![Screensaver](docs/images/screensaver.png) | ![Sleeping](docs/images/sleeping.png) |
 
 <sub>Pictures are design mockups (1264 × 1680, the Oasis 2 screen). On the device
 the plugin looks very close, but not pixel for pixel the same.</sub>
