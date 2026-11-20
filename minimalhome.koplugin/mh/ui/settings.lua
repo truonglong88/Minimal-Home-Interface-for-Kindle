@@ -22,10 +22,7 @@ local Theme = require("mh/theme")
 
 local px = Theme.px
 
-local function version()
-    local ok, meta = pcall(dofile, Theme.plugin_dir .. "/_meta.lua")
-    return ok and meta and meta.version or "?"
-end
+local Updater = require("mh/updater")
 
 local function deviceName()
     local Device = require("device")
@@ -207,9 +204,86 @@ function Settings:open(PageClass)
     PageClass:new{ ui = self.ui, on_close = function() self:refresh() end }:show()
 end
 
+--- "Update available" card at the top (design: Updates – Settings). While the
+--- new build downloads it shows the progress; KOReader then restarts by itself.
+function Settings:updateBanner(m)
+    local w = self:contentWidth()
+    local border, pad_h, pad_v = px(4), px(36), px(30)
+    local inner = w - 2 * border - 2 * pad_h
+    local downloading = self.dl_pct ~= nil
+    local btn_w = px(220)
+    local text_w = downloading and inner or (inner - btn_w - px(32))
+    local title, sub
+    if downloading then
+        title = "Downloading " .. m.version .. "… " .. self.dl_pct .. "%"
+        sub = "KOReader restarts by itself when it’s done."
+    else
+        title = "Update available"
+        sub = "Version " .. m.version .. " · " .. Updater.channelName()
+        if m.size and m.size > 0 then sub = sub .. string.format(" · %.1f MB", m.size / 1048576) end
+    end
+    local texts = VerticalGroup:new{
+        align = "left",
+        C.text(title, "sans_bold", 40, self.col.fg, text_w),
+        C.space(1, px(6)),
+        C.text(sub, "sans_medium", 30, self.col.muted, text_w),
+    }
+    local row
+    if downloading then
+        row = texts
+    else
+        local btn = C.tappable(C.box(btn_w, px(104), C.text("Update", "sans_bold", 38, self.col.bg),
+            { bg = self.col.fg, radius = px(10), halign = "center", valign = "center" }),
+            function() UIManager:nextTick(function() self:runUpdate(m) end) end)
+        row = HorizontalGroup:new{ align = "center", C.box(text_w, math.max(texts:getSize().h, px(104)), texts,
+            { valign = "center" }), C.space(px(32), 1), btn }
+    end
+    local group = VerticalGroup:new{ align = "left", row }
+    if downloading then
+        table.insert(group, C.space(1, px(24)))
+        table.insert(group, C.progress(inner, px(16), self.dl_pct / 100,
+            require("ffi/blitbuffer").gray(0.2), self.col.fg, px(8)))
+    end
+    local h = group:getSize().h + 2 * pad_v + 2 * border
+    return VerticalGroup:new{ align = "left", C.space(1, px(48)),
+        C.box(w, h, group, { border = border, border_color = self.col.fg, radius = px(16),
+            pad_l = border + pad_h, pad_r = border + pad_h, pad_t = border + pad_v, pad_b = border + pad_v,
+            valign = "center" }) }
+end
+
+function Settings:runUpdate(m)
+    if self.dl_pct then return end
+    local snack = require("mh/ui/snackbar")
+    if not require("mh/wifi").isConnected() then
+        snack.show("Connect to Wi-Fi to update")
+        return
+    end
+    local function show(pct)
+        self.dl_pct = pct
+        self:refresh()
+        UIManager:forceRePaint()
+    end
+    show(0)
+    local ok, err = Updater.install(m, show)
+    if ok then
+        show(100)
+        D.restartKOReader(self.ui)
+        return
+    end
+    logger.warn("MinimalHome: update failed:", err)
+    self.dl_pct = nil
+    self:refresh()
+    snack.show("Couldn’t update · still on " .. Updater.version(), 4)
+end
+
 function Settings:blocks()
     local ui = self.ui
     local list = { function() return self:headerBlock() end }
+    local found = self.dl_pct and self.updating or Updater.available()
+    if found then
+        self.updating = found
+        table.insert(list, function() return self:updateBanner(found) end)
+    end
     local function section(label, rows) table.insert(list, function() return self:section(label, rows) end) end
 
     local conn = {}
@@ -269,7 +343,8 @@ function Settings:blocks()
                 self:button("⇥  Exit to Kindle", half, function() D.exitKOReader(ui) end),
             },
             C.space(1, px(24)),
-            C.text("Version " .. version() .. " · " .. deviceName(), "sans_medium", 28, self.col.muted),
+            C.text("Version " .. Updater.version() .. " · " .. Updater.channelName() .. " · " .. deviceName(),
+                "sans_medium", 28, self.col.muted),
         }
     end)
     return list
@@ -290,6 +365,10 @@ function Settings.openPage(ui, opts)
         return nil
     end
     logger.info("MinimalHome: Settings shown")
+    -- a new build on GitHub? (only with Wi-Fi on; the card appears when it is found)
+    Updater.checkSoon(Updater.SETTINGS_EVERY, function()
+        if not page.closed then page:refresh() end
+    end)
     return page
 end
 

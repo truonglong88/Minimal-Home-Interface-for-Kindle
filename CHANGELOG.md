@@ -1,6 +1,27 @@
 # Changelog
 
-## First public release (version at publish time)
+## Unreleased
+
+Changes made since the last push to GitHub. They get the plugin version of the
+next push.
+
+- Contents: every chapter of long books is listed; rows are only drawn when they
+  scroll into view (faster to open, less battery). Titles wrap to two lines
+- Contents: the chapter being read opens two thirds of the way down the screen
+- Reading: tap the strip along the bottom edge (where the time left is written) to
+  switch time left in book / in chapter / nothing; it no longer turns the page
+- Fix: "time left in chapter" didn't show in a book's last chapter; books without
+  chapters skip that choice
+- Updates over Wi-Fi: when a newer build is on GitHub, a dot appears on Home's
+  Settings button and Settings shows an *Update available* card. *Update*
+  downloads it, checks its checksum, installs it and restarts KOReader; if
+  anything fails the old version stays. Checked only when Wi-Fi is already on
+  and Home or Settings opens (at most once an hour from Home)
+- Two update channels, set by how the plugin was built: official releases
+  (Stable) and test builds from the `dev` branch (Dev). The Settings footer
+  shows which one
+
+## 0.1.35 – first public release
 
 **Home**
 - Currently reading (progress, time left, Continue reading), Start reading for a

@@ -9,6 +9,7 @@ minimalhome.koplugin/      the plugin (this folder is what users install)
   mh/wifi.lua              Wi-Fi on/off, scan, join (for the Wi-Fi popup)
   mh/reader.lua            reading screen: style, status bar, touch zones
   mh/messages.lua          KOReader's messages and questions in our look
+  mh/updater.lua           updates from GitHub releases (check, download, verify, install)
   mh/data/                 library, model (pure logic), search, prefs
   mh/ui/                   screens and widgets (home, search, settings, reader menu,
                            quick panel, keyboard, Wi-Fi popup, snackbar, confirm…)
@@ -32,9 +33,22 @@ layout widgets; they catch crashes, not looks. Always check on a device too.
 ## Package
 
 ```sh
-sh tools/package.sh            # raises the patch version, writes dist/minimalhome-x.y.z.zip
-sh tools/package.sh --no-bump  # same version (used by the release workflow)
+sh tools/package.sh                              # raises the patch version, Dev channel
+sh tools/package.sh --no-bump --channel stable   # same version, Stable (release workflow)
 ```
+
+Writes `dist/minimalhome-x.y.z.zip` and `dist/latest.json` (version, file name,
+size, SHA-256, channel), which the in-app updater reads. The zip carries
+`build.lua` with its channel.
+
+## Branches and update channels
+
+- `dev`: every push runs `.github/workflows/dev.yml`, which replaces the `dev`
+  pre-release with the new zip and `latest.json`. Devices running a Dev build
+  offer it in Settings.
+- `main`: official releases. Publishing a release runs `release.yml`, which
+  attaches the zip (Stable channel) and `latest.json`. Devices running a Stable
+  build offer the newest release.
 
 ## Release
 

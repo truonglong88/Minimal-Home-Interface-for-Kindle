@@ -323,6 +323,24 @@ check("contents page", function()
     assert(Contents.currentIndex(Contents.entries(ui), 27) == 3, "current chapter")
     local c = Contents:new{ ui = ui }
     paint(c)
+    -- a long table of contents: laid out without building rows; the chapter being
+    -- read sits two thirds of the way down
+    local long = {}
+    for i = 1, 400 do long[i] = { title = "Chapter " .. i, page = i * 2, depth = 1 } end
+    ui.toc.toc = long
+    ui.getCurrentPage = function() return 500 end
+    local built = 0
+    local orig_row = Contents.row
+    Contents.row = function(...) built = built + 1; return orig_row(...) end
+    local c2 = Contents:new{ ui = ui }
+    Contents.row = orig_row
+    assert(#c2.viewport.blocks >= 400, "every chapter listed: " .. #c2.viewport.blocks)
+    assert(built < 30, "only visible rows built: " .. built)
+    local b = c2.viewport.blocks[c2.current_block]
+    local y = c2.view_top + b.y + b.h / 2 - c2.viewport.scroll
+    local H = require("device").screen:getHeight()
+    assert(math.abs(y - H * 2 / 3) < 4, "current chapter at 2/3: " .. y)
+    paint(c2)
 end)
 
 if io.open("frontend/ui/data/keyboardlayouts/vi_keyboard.lua") then
@@ -613,6 +631,71 @@ check("battery shows a bolt while charging", function()
     walk(bar)
     p.isCharging = orig
     assert(found, "bolt drawn")
+end)
+
+check("updates: check GitHub, dot on Home, card in Settings, failed update keeps the old one", function()
+    local U = require("mh/updater")
+    assert(U.newer("0.1.37", "0.1.36") and U.newer("0.2.0", "0.1.99") and not U.newer("0.1.36", "0.1.36")
+        and not U.newer("0.1.9", "0.1.10"), "version compare")
+    assert(U.manifestUrl("dev"):find("/download/dev/latest.json", 1, true), "dev manifest url")
+    assert(U.manifestUrl("stable"):find("/latest/download/latest.json", 1, true), "stable manifest url")
+    local Prefs = require("mh/data/prefs")
+    local nm = fakeNetwork()
+    local hops = {}
+    package.loaded["socket"] = { skip = function(n, ...) return select(n + 1, ...) end }
+    package.loaded["socket.url"] = { absolute = function(_, loc) return loc end }
+    package.loaded["socketutil"] = { set_timeout = function() end, reset_timeout = function() end, USER_AGENT = "t" }
+    package.loaded["ltn12"] = { sink = { table = function(t) return function(c) if c then t[#t + 1] = c end return 1 end end } }
+    package.loaded["ssl.https"] = { request = function(req)
+        hops[#hops + 1] = req.url
+        if #hops == 1 then return 1, 302, { location = "https://objects.example/latest.json" }, "302" end
+        req.sink("{json}")
+        return 1, 200, {}, "200"
+    end }
+    package.loaded["rapidjson"] = { decode = function(text)
+        assert(text == "{json}", "redirect body must not reach the manifest")
+        return { version = "9.9.9", file = "minimalhome-9.9.9.zip", sha256 = string.rep("a", 64), size = 2621440 }
+    end }
+    Prefs.set("update_checked_at", nil)
+    Prefs.set("update_found", nil)
+    local found
+    U.check(3600, function(m) found = m end)
+    assert(#hops == 2 and found and found.version == "9.9.9", "found the new build through a redirect")
+    assert(U.available(), "remembered")
+    -- once an hour: a second look right away does not touch the network
+    U.check(3600, function() end)
+    assert(#hops == 2, "throttled")
+    -- Wi-Fi off: no check at all
+    nm.on = false
+    Prefs.set("update_checked_at", nil)
+    U.check(0)
+    assert(#hops == 2, "no check without Wi-Fi")
+    nm.on = true; nm.cur = "Home 5G"
+
+    local Home = require("mh/ui/home")
+    paint(Home:new{ ui = {} })
+
+    withUI(function(run, shown)
+        local Settings = require("mh/ui/settings")
+        local page = Settings:new{ ui = fake_ui }
+        paint(page)
+        local install = U.install
+        local seen, snacks = {}, {}
+        local Snackbar = require("mh/ui/snackbar")
+        local orig_show = Snackbar.show
+        Snackbar.show = function(t) snacks[#snacks + 1] = t end
+        U.install = function(_, progress) progress(40); seen[#seen + 1] = page.dl_pct; paint(page); return nil, "checksum mismatch" end
+        page:runUpdate(U.available())
+        U.install = install
+        Snackbar.show = orig_show
+        run()
+        assert(seen[1] == 40, "progress shown while downloading")
+        assert(page.dl_pct == nil, "back to the card after a failure")
+        assert(snacks[1] and snacks[1]:find("Couldn’t update · still on", 1, true), "failure snackbar")
+        assert(U.available(), "the update is still offered")
+    end)
+    Prefs.set("update_found", nil)
+    Prefs.set("update_checked_at", nil)
 end)
 
 check("finished screen", function()

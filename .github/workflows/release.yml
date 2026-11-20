@@ -31,9 +31,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build zip
-        run: sh tools/package.sh --no-bump
+        run: sh tools/package.sh --no-bump --channel stable
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          # latest.json tells Kindles on the Stable channel about this release
+          files: |
+            dist/*.zip
+            dist/latest.json
           generate_release_notes: false

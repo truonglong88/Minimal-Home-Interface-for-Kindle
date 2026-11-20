@@ -157,10 +157,17 @@ end
 
 function Page:buildColumn()
     local out, y = {}, 0
-    for _, build in ipairs(self:blocks()) do
-        local w = build()
-        local h = w:getSize().h
-        w:free()
+    for _, block in ipairs(self:blocks()) do
+        local build, h
+        if type(block) == "table" then
+            -- { h = height, build = fn }: known height, built only when scrolled into view
+            build, h = block.build, block.h
+        else
+            build = block
+            local w = build()
+            h = w:getSize().h
+            w:free()
+        end
         out[#out + 1] = { y = y, h = h, build = build }
         y = y + h
     end

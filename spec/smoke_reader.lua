@@ -37,7 +37,7 @@ local ui = {
     rolling = true,
     view = { footer = footer, registerViewModule = function(_, _, w) module = w end },
     statistics = { settings = { is_enabled = true }, avg_time = 30 },
-    toc = { getChapterPagesLeft = function() return 16 end },
+    toc = { toc = { { title = "One", page = 1 } }, getChapterPagesLeft = function() return 16 end },
     document = { getTotalPagesLeft = function() return 270 end },
 }
 footer.ui = ui
@@ -52,6 +52,17 @@ footer:TapFooter({})
 check(gen(footer) == "2 h 15 min left in book", "book time after second tap: " .. tostring(gen(footer)))
 footer:TapFooter({})
 check(gen(footer) == "8 min left in chapter", "chapter after third tap")
+-- last chapter (no next chapter): still "in chapter", from what is left of the book
+ui.toc.getChapterPagesLeft = function() return nil end
+check(gen(footer) == "2 h 15 min left in chapter", "last chapter: " .. tostring(gen(footer)))
+ui.toc.getChapterPagesLeft = function() return 16 end
+-- a book without chapters: the cycle skips "chapter"
+Prefs.set("time_scope", "book")
+ui.toc.toc = {}
+footer:TapFooter({})
+check(Reader.timeScope() == "none", "no chapters: book → nothing, got " .. Reader.timeScope())
+ui.toc.toc = { { title = "One", page = 1 } }
+Prefs.set("time_scope", "chapter")
 
 local bb = require("ffi/blitbuffer").new(1264, 1680)
 bb.getWidth = function() return 1264 end

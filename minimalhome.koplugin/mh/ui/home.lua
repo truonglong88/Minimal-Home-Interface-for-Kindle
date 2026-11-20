@@ -66,7 +66,10 @@ function Home:init()
         self.key_events.MHNextPage = { { Device.input.group.PgFwd } }
         self.key_events.MHPrevPage = { { Device.input.group.PgBack } }
     end
-    self:reload()    self:scheduleClock()
+    self:reload()
+    self:scheduleClock()
+    -- a new build on GitHub? At most once an hour, only when Wi-Fi is already on
+    require("mh/updater").checkSoon(require("mh/updater").HOME_EVERY, function() self:rebuild() end)
 end
 
 -- Data ------------------------------------------------------------------------
@@ -147,10 +150,19 @@ function Home:header()
         C.box(search_w, btn, search, { border = px(4), border_color = self.col.fg, radius = px(10),
             pad_l = px(26), valign = "center" }),
         function() self:openSearch() end)
-    local settings_box = C.tappable(
-        C.box(btn, btn, C.slidersIcon(px(64), self.col.fg, self.col.bg), { border = px(4), border_color = self.col.fg,
-            radius = px(10), halign = "center", valign = "center" }),
-        function() self:openSettings() end)
+    local settings_btn = C.box(btn, btn, C.slidersIcon(px(64), self.col.fg, self.col.bg), { border = px(4),
+        border_color = self.col.fg, radius = px(10), halign = "center", valign = "center" })
+    if require("mh/updater").available() then
+        -- a new build is waiting: black dot (white ring) on the button's top-right corner
+        local d, ring = px(30), px(6)
+        local o = d + 2 * ring
+        local dot = C.box(o, o, C.Rect:new{ w = d, h = d, color = self.col.fg, radius = math.floor(d / 2) },
+            { bg = self.col.bg, radius = math.floor(o / 2), pad = ring })
+        dot.overlap_offset = { btn - o + px(8), -px(8) }
+        settings_btn = OverlapGroup:new{ dimen = Geom:new{ w = btn, h = btn }, allow_mirroring = false,
+            settings_btn, dot }
+    end
+    local settings_box = C.tappable(settings_btn, function() self:openSettings() end)
 
     return HorizontalGroup:new{
         align = "center",
@@ -623,7 +635,10 @@ function Home:onResume()
 end
 
 -- Wi-Fi turned on or off: show or hide its icon.
-function Home:onNetworkConnected() self:refreshStatus() end
+function Home:onNetworkConnected()
+    self:refreshStatus()
+    require("mh/updater").checkSoon(require("mh/updater").HOME_EVERY, function() self:rebuild() end)
+end
 function Home:onNetworkDisconnected() self:refreshStatus() end
 -- Charger plugged in or out: the bolt on the battery.
 function Home:onCharging() self:refreshStatus() end
@@ -864,10 +879,20 @@ function Home:openSearch()
     end
 end
 
+--- Rebuild the whole column where it is (e.g. the update dot came or went).
+function Home:rebuild()
+    if self.closed then return end
+    self._keep_scroll = self.viewport and self.viewport.scroll or 0
+    self.blocks = nil
+    self:layout()
+    UIManager:setDirty(self, "ui")
+end
+
 function Home:openSettings()
     require("mh/ui/settings").openPage(self.ui, {
         on_close = function()
             if not self.closed then
+                self:rebuild()
                 self:refreshStatus()
                 UIManager:setDirty(self, "full")
             end

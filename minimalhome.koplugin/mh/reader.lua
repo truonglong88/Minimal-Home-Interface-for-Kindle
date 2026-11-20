@@ -228,11 +228,15 @@ local function timeLeftText(footer)
     if left then
         return Model.timeLeftLabel(left * per, "chapter")
     end
-    return Model.timeLeftLabel(ui.document:getTotalPagesLeft(footer.pageno) * per, "book")
+    -- no next chapter: in the last chapter, what is left of the book is left of the chapter
+    local pages = ui.document:getTotalPagesLeft(footer.pageno)
+    return Model.timeLeftLabel(pages * per, Reader.hasToc(ui) and "chapter" or "book")
 end
 
 -- Tapping the time left cycles: book → chapter → nothing → book …
 Reader.TIME_SCOPES = { "book", "chapter", "none" }
+-- the bottom strip (where the time left is written) starts here, as a share of the screen height
+Reader.TIME_STRIP_Y = 0.93
 
 function Reader.timeScope()
     local s = Prefs.get("time_scope")
@@ -240,11 +244,27 @@ function Reader.timeScope()
     return "chapter"
 end
 
-function Reader.nextTimeScope()
+--- Does the book have chapters (a table of contents)?
+function Reader.hasToc(ui)
+    local ok, n = pcall(function()
+        local toc = ui and ui.toc
+        if not toc then return 0 end
+        if toc.fillToc then toc:fillToc() end
+        return toc.toc and #toc.toc or 0
+    end)
+    return ok and n > 0
+end
+
+--- book → chapter → nothing → book … (a book without chapters skips "chapter")
+function Reader.nextTimeScope(ui)
     local cur = Reader.timeScope()
+    local n = #Reader.TIME_SCOPES
     for i, v in ipairs(Reader.TIME_SCOPES) do
         if v == cur then
-            local nxt = Reader.TIME_SCOPES[i % #Reader.TIME_SCOPES + 1]
+            local nxt = Reader.TIME_SCOPES[i % n + 1]
+            if nxt == "chapter" and ui and not Reader.hasToc(ui) then
+                nxt = Reader.TIME_SCOPES[(i + 1) % n + 1]
+            end
             Prefs.set("time_scope", nxt)
             return nxt
         end
@@ -336,15 +356,16 @@ function Reader.registerMenuZones(ui)
             handler = function(ges) return Reader.pullUp(ui, ges) end,
         },
         {
-            -- bottom-left corner: same as tapping the time left (KOReader toggles
-            -- the front light here by default, which is easy to hit by mistake)
-            id = "minimalhome_corner_bottom_left",
+            -- the strip along the bottom edge, where "… min left" is written: tapping
+            -- it switches what it shows, and never turns the page
+            id = "minimalhome_time_left",
             ges = "tap",
-            screen_zone = { ratio_x = 0, ratio_y = 7 / 8, ratio_w = 1 / 8, ratio_h = 1 / 8 },
-            overrides = { "tap_left_bottom_corner", "readerfooter_tap", "tap_backward", "tap_forward" },
+            screen_zone = { ratio_x = 0, ratio_y = Reader.TIME_STRIP_Y, ratio_w = 1, ratio_h = 1 - Reader.TIME_STRIP_Y },
+            overrides = { "tap_left_bottom_corner", "tap_right_bottom_corner", "readerfooter_tap",
+                "tap_backward", "tap_forward", "minimalhome_menu_bottom" },
             handler = function()
                 if not Prefs.get("reader_style") then return false end
-                Reader.nextTimeScope()
+                Reader.nextTimeScope(ui)
                 local footer = ui.view and ui.view.footer
                 if footer and footer.onUpdateFooter then footer:onUpdateFooter(true) end
                 return true
@@ -360,7 +381,7 @@ function Reader.registerMenuZones(ui)
         {
             id = "minimalhome_menu_bottom",
             ges = "tap",
-            screen_zone = { ratio_x = 0, ratio_y = 0.8, ratio_w = 1, ratio_h = 0.15 },
+            screen_zone = { ratio_x = 0, ratio_y = 0.8, ratio_w = 1, ratio_h = Reader.TIME_STRIP_Y - 0.8 },
             overrides = { "readerconfigmenu_tap", "readerconfigmenu_ext_tap", "tap_forward", "tap_backward" },
             handler = function() return show() end,
         },
@@ -512,7 +533,7 @@ function Reader.attach(ui)
             if f.view and f.view.flipping_visible then
                 return tap(f, ges)
             end
-            Reader.nextTimeScope()
+            Reader.nextTimeScope(f.ui)
             f:onUpdateFooter(true)
             return true
         end

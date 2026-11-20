@@ -24,6 +24,13 @@ local Contents = Page:extend{
     ui = nil,
 }
 
+-- Every row has the same height (titles wrap to two lines at most), so the
+-- whole list is laid out without drawing it: rows are only built when they
+-- scroll into view. A book with hundreds of chapters opens as fast as a short one.
+Contents.ROW_H = 132
+-- where the chapter being read sits when the page opens (from the top of the screen)
+Contents.CURRENT_AT = 2 / 3
+
 --- The table of contents as { title, page, depth, xpointer }.
 function Contents.entries(ui)
     local toc = ui and ui.toc
@@ -57,10 +64,11 @@ function Contents:init()
     local book = props.display_title or props.title or ""
     self.subtitle = (book ~= "" and (book .. " · ") or "") .. string.format("page %d of %d", page, total)
     Page.init(self)
-    -- open with the chapter being read in view (a third of the way down)
+    -- open with the chapter being read two thirds of the way down the screen
     if self.current_block and self.viewport.blocks[self.current_block] then
-        local y = self.viewport.blocks[self.current_block].y
-        self.viewport:scrollTo(y - math.floor(self.viewport.h / 3))
+        local b = self.viewport.blocks[self.current_block]
+        local target = math.floor(self.dimen.h * Contents.CURRENT_AT) - self.view_top
+        self.viewport:scrollTo(b.y + math.floor(b.h / 2) - target)
         self:updateChrome()
     end
 end
@@ -82,8 +90,8 @@ function Contents:row(e, is_current)
     end
     local text_w = w - indent - right:getSize().w - px(32)
     local kind = is_current and "sans_bold" or (sub and "sans_medium" or "sans_bold")
-    local title = C.textbox(e.title, kind, sub and 34 or 36, self.col.fg, text_w, 3, 0.25)
-    local h = math.max(px(120), title:getSize().h + 2 * px(20))
+    local title = C.textbox(e.title, kind, sub and 34 or 36, self.col.fg, text_w, 2, 0.15)
+    local h = px(Contents.ROW_H) - px(3)
     local content = OverlapGroup:new{ dimen = Geom:new{ w = w, h = h },
         C.box(indent + text_w, h, title, { valign = "center", pad_l = indent }) }
     local r = C.box(right:getSize().w, h, right, { valign = "center" })
@@ -117,7 +125,7 @@ function Contents:blocks()
     table.insert(list, function() return C.space(1, px(56)) end)
     for i, e in ipairs(self.entries) do
         local is_current = i == self.current
-        table.insert(list, function() return self:row(e, is_current) end)
+        table.insert(list, { h = px(Contents.ROW_H), build = function() return self:row(e, is_current) end })
         if is_current then self.current_block = #list end
     end
     return list

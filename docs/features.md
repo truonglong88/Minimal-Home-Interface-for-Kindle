@@ -25,8 +25,8 @@ Pictures are design mockups at the Kindle Oasis 2 screen size (1264 × 1680); th
 
 ![Reading](images/reading.png)
 
-- Clock at the top, *time left in chapter* at the bottom (tap the bottom-left
-  corner to switch to time left in book, or nothing). Same room above and below the text.
+- Clock at the top, *time left in chapter* at the bottom (tap the bottom edge to
+  switch: time left in book, in chapter, or nothing). Same room above and below the text.
 - **Reading menu** (tap the middle): title, bookmark, page slider with ‹ › for one
   page, Contents, Go to page, Font.
 - **Contents**: opens at the chapter being read, scrollbar, *Back to top*.
@@ -58,6 +58,12 @@ switch, − / + and Auto (follows the light sensor; shows the level it picked).
 - **Full refresh**, **Screensaver** (book cover or one of the pictures), **Default font**, **Swap page-turn buttons**, **Sleep after**.
 - **All KOReader settings**: KOReader's full menu, if you need it.
 - *Restart KOReader*, *Exit to Kindle*.
+- **Updates**: when a newer version is on GitHub, a dot appears on Home's
+  Settings button and Settings shows *Update available*. *Update* downloads it,
+  checks it, installs it and restarts KOReader. If anything fails, the old
+  version stays. It only looks when Wi-Fi is already on and Home or Settings
+  opens, at most once an hour from Home. Release zips follow official releases;
+  the footer shows the version and channel.
 
 ![Screensaver](images/screensaver.png) ![Sleeping](images/sleeping.png)
 

@@ -68,6 +68,7 @@ for where to read about them.
 - Wi-Fi, Dark mode, Rotation lock, brightness with Auto (light sensor)
 - Wi-Fi popup: networks nearby, join saved ones with a tap, our own password keyboard
 - Settings: screensaver, default font, page-turn buttons, full refresh, sleep timer, SSH
+- Updates from the device: *Update available* in Settings when a new release is out
 
 **Everywhere**
 - One keyboard for every text field: letters / numbers, Vietnamese Telex or English
@@ -106,7 +107,7 @@ Details, updating over Wi-Fi and uninstalling: [docs/install-plugin.md](docs/ins
 | Reading | tap the left / right edge, swipe sideways, page buttons | turn pages |
 | Reading | swipe down from the top | quick panel |
 | Reading | swipe up from the bottom | back to Home |
-| Reading | tap the bottom-left corner | switch *time left*: chapter / book / off |
+| Reading | tap the bottom edge (the time left) | switch *time left*: book / chapter / off |
 | Reading | hold a word | dictionary, highlight (KOReader) |
 | Status bar | hold | screenshot |
 

@@ -1,0 +1,46 @@
+name: Dev build
+
+# Every push to the dev branch replaces the "dev" pre-release with a fresh zip and
+# latest.json. Kindles on the Dev channel see it the next time Home or Settings
+# opens with Wi-Fi on.
+on:
+  push:
+    branches: [dev]
+
+concurrency:
+  group: dev-build
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LuaJIT and luacheck
+        run: sudo apt-get update && sudo apt-get install -y luajit lua-check lua-filesystem
+      - name: Lint
+        run: luacheck minimalhome.koplugin
+      - name: Get KOReader (for the smoke tests)
+        run: git clone --depth 1 https://github.com/koreader/koreader ../koreader
+      - name: Tests
+        run: sh tools/test.sh ../koreader
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build zip
+        run: sh tools/package.sh --no-bump --channel dev
+      - name: Replace the dev pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(sed -n 's/.*version = "\(.*\)".*/\1/p' minimalhome.koplugin/_meta.lua)"
+          gh release delete dev --cleanup-tag --yes || true
+          gh release create dev dist/*.zip dist/latest.json \
+            --prerelease --target "$GITHUB_SHA" \
+            --title "Dev build $VERSION" \
+            --notes "Test build $VERSION from the dev branch (${GITHUB_SHA::7}). Not an official release. Kindles on the Dev channel offer it in Settings."

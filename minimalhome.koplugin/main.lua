@@ -52,6 +52,8 @@ function MinimalHome:init()
             local D = require("mh/device")
             if D.currentScreensaver() == "book" then D.ensureCoverFallback() end
         end)
+        -- just updated over Wi-Fi: "Updated to 0.1.37"
+        pcall(function() require("mh/updater").announce() end)
         if Prefs.get("reader_style") then
             -- written before any book opens, so the reader picks it up
             pcall(function() require("mh/reader").applyStyle() end)

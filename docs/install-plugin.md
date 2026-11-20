@@ -12,6 +12,12 @@
 Minimal Home opens instead of KOReader's file browser. Books come from the
 device's documents folder (KOReader's home folder).
 
+## Update from the device
+
+With Wi-Fi on, open Home or Settings. When a newer release is out, Settings shows
+*Update available*: tap *Update*. KOReader restarts by itself with the new
+version. Nothing else is needed.
+
 ## Update over Wi-Fi (SSH)
 
 1. On the device: quick panel (swipe down) → *All Settings* → *SSH access* on.
