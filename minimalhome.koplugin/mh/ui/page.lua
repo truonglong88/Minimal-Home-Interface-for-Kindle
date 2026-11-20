@@ -97,11 +97,17 @@ function Page:toggle(on)
 end
 
 --- One settings row: label (+ sub-line) on the left; a switch or a value with "›" on the right.
---- opts = { label, sub, toggle = bool|nil, value = string|nil, action = fn, enabled = bool }
+--- opts = { label, sub, toggle = bool|nil, value = string|nil, button = string|nil, action = fn, enabled = bool }
 function Page:row(opts)
     local w = self:contentWidth()
     local right
-    if opts.toggle ~= nil then
+    if opts.button then
+        -- an outlined button on the right (the whole row is its tap area)
+        local color = opts.button_muted and self.col.muted or self.col.fg
+        local t = C.text(opts.button, "sans_bold", 32, color)
+        right = C.box(math.max(px(260), t:getSize().w + 2 * px(32)), px(88), t, { border = px(4),
+            border_color = color, radius = px(10), halign = "center", valign = "center" })
+    elseif opts.toggle ~= nil then
         right = self:toggle(opts.toggle)
     else
         right = HorizontalGroup:new{
@@ -254,7 +260,7 @@ function Page:paintTo(bb, x, y)
         -- grabbers: pull down from the top for the quick panel, swipe up from the bottom for Home
         local gw, gh = px(120), px(8)
         local gx = x + math.floor((self.dimen.w - gw) / 2)
-        bb:paintRoundedRect(gx, y + px(18), gw, gh, self.col.line, math.floor(gh / 2))
+        C.paintTopGrabber(bb, x + math.floor(self.dimen.w / 2), y + px(14), self.col.line)
         bb:paintRoundedRect(gx, y + self.dimen.h - px(18) - gh, gw, gh, self.col.line, math.floor(gh / 2))
     end
 end

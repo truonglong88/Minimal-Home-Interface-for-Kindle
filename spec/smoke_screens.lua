@@ -728,6 +728,18 @@ check("updates: check GitHub, dot on Home, card in Settings, failed update keeps
         for _, fn in pairs(U.listeners) do fn() end
         paint(page)
         page:scrollBy(300)
+        -- Check update in Device: Checking…, then "Up to date" when GitHub has nothing newer
+        U.job = nil
+        local orig_soon = U.checkSoon
+        local cb
+        U.checkSoon = function(every, done) assert(every == 0, "a manual check ignores the hourly limit"); cb = done; return true end
+        page:checkNow()
+        assert(page.check_state == "checking", "button shows Checking…")
+        paint(page)
+        cb(nil, true, false)
+        assert(page.check_state == "done", "up to date")
+        paint(page)
+        U.checkSoon = orig_soon
         page:close()
         assert(not U.listeners[page] or page.closed, "closed pages stop listening")
         U.job = nil

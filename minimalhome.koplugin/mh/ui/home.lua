@@ -69,7 +69,8 @@ function Home:init()
     self:reload()
     self:scheduleClock()
     -- a new build on GitHub? At most once an hour, only when Wi-Fi is already on
-    require("mh/updater").checkSoon(require("mh/updater").HOME_EVERY, function() self:rebuild() end)
+    require("mh/updater").checkSoon(require("mh/updater").HOME_EVERY,
+        function(_, _, changed) if changed then self:rebuild() end end)
 end
 
 -- Data ------------------------------------------------------------------------
@@ -589,8 +590,8 @@ function Home:layout()
     local status_box = C.box(self.dimen.w, view_top, status, { bg = self.col.bg,
         pad_l = px(Theme.margin_h), pad_t = px(Theme.margin_top) })
     -- small grabber at the top edge: the quick panel pulls down from here
-    local grabber = C.Rect:new{ w = px(120), h = px(8), color = self.col.line, radius = px(4),
-        overlap_offset = { math.floor(self.dimen.w / 2) - px(60), px(18) } }
+    local grabber = C.TopGrabber:new{ color = self.col.line,
+        overlap_offset = { math.floor(self.dimen.w / 2) - px(64), px(14) } }
     self[1] = Layers:new{
         dimen = Geom:new{ w = self.dimen.w, h = self.dimen.h },
         OverlapGroup:new{ dimen = Geom:new{ w = self.dimen.w, h = view_top }, status_box, grabber },
@@ -637,7 +638,8 @@ end
 -- Wi-Fi turned on or off: show or hide its icon.
 function Home:onNetworkConnected()
     self:refreshStatus()
-    require("mh/updater").checkSoon(require("mh/updater").HOME_EVERY, function() self:rebuild() end)
+    require("mh/updater").checkSoon(require("mh/updater").HOME_EVERY,
+        function(_, _, changed) if changed then self:rebuild() end end)
 end
 function Home:onNetworkDisconnected() self:refreshStatus() end
 -- Charger plugged in or out: the bolt on the battery.

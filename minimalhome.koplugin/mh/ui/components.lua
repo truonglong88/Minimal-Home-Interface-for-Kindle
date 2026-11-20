@@ -455,6 +455,33 @@ end
 Chevron.SHAPE = { { 15.9, 4.2 }, { 18.0, 6.3 }, { 12.3, 12 }, { 18.0, 17.7 }, { 15.9, 19.8 }, { 8.1, 12 } }
 C.Chevron = Chevron
 
+--[[ Top grabber: a wide, blunt "V" (pull down here for the quick panel).
+     Design: 120 x 14 px, 8 px stroke with round ends, grey. The bottom edge keeps
+     its straight bar (swipe up for Home). ]]
+function C.paintTopGrabber(bb, cx, top, color)
+    local px = Theme.px
+    local half, drop, r = px(60), px(14), math.max(1, math.floor(px(8) / 2))
+    local pts = { { cx - half, top + r }, { cx, top + r + drop }, { cx + half, top + r } }
+    for i = 1, 2 do
+        local a, b = pts[i], pts[i + 1]
+        local n = math.max(1, math.ceil(math.max(math.abs(b[1] - a[1]), math.abs(b[2] - a[2]))))
+        for k = 0, n do
+            local t = k / n
+            local x = math.floor(a[1] + (b[1] - a[1]) * t + 0.5)
+            local y = math.floor(a[2] + (b[2] - a[2]) * t + 0.5)
+            bb:paintRoundedRect(x - r, y - r, 2 * r, 2 * r, color, r)
+        end
+    end
+end
+
+local TopGrabber = Widget:extend{ color = nil }
+function TopGrabber.getSize() return Geom:new{ w = Theme.px(128), h = Theme.px(32) } end
+function TopGrabber:paintTo(bb, x, y)
+    C.paintTopGrabber(bb, x + math.floor(self:getSize().w / 2), y, self.color)
+end
+function TopGrabber.free() end
+C.TopGrabber = TopGrabber
+
 --- Round outlined button (‹ › − +): `child` centred in a circle, greyed when `off`.
 function C.roundButton(size, child, col, off, callback)
     local grey = require("ffi/blitbuffer").gray(0.2)

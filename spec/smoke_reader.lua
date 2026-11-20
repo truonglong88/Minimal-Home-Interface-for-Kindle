@@ -18,6 +18,8 @@ check(footer_settings.chapter_time_to_read and not footer_settings.page_progress
 check(footer_settings.time == false and footer_settings.battery == false, "other footer items off")
 check(footer_settings.progress_bar_position == "alongside", "missing defaults filled in")
 check(footer_settings.item_prefix == "icons", "footer keeps spaces between words")
+check(footer_settings.percentage and footer_settings.order[3] == "percentage",
+    "footer: % of the book on the right, after the filler")
 check(G_reader_settings:readSetting("copt_line_spacing") == 120, "typography defaults written")
 
 -- attach to a fake reader
@@ -25,7 +27,8 @@ local module
 local footer
 footer = {
     pageno = 10,
-    textGeneratorMap = { chapter_time_to_read = function() return "original" end },
+    textGeneratorMap = { chapter_time_to_read = function() return "original" end,
+        percentage = function() return "⤠ 3.2%" end },
     updateFooterTextGenerator = function() end,
     updateFooterContainer = function() end,
     resetLayout = function() end,
@@ -38,11 +41,12 @@ local ui = {
     view = { footer = footer, registerViewModule = function(_, _, w) module = w end },
     statistics = { settings = { is_enabled = true }, avg_time = 30 },
     toc = { toc = { { title = "One", page = 1 } }, getChapterPagesLeft = function() return 16 end },
-    document = { getTotalPagesLeft = function() return 270 end },
+    document = { getTotalPagesLeft = function() return 270 end, getPageCount = function() return 312 end },
 }
 footer.ui = ui
 Reader.attach(ui)
 check(module ~= nil, "header registered")
+check(footer.textGeneratorMap.percentage(footer) == "3%", "book %: " .. tostring(footer.textGeneratorMap.percentage(footer)))
 local gen = footer.textGeneratorMap.chapter_time_to_read
 check(gen(footer) == "8 min left in chapter", "chapter time: " .. tostring(gen(footer)))
 -- cycle: book → chapter → nothing → book; the default is chapter

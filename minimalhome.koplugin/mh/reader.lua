@@ -23,7 +23,9 @@ local Theme = require("mh/theme")
 
 local Reader = {}
 
-Reader.STYLE_VERSION = 8 -- 5: narrower margins, bigger bars; 6: font path that loads; 7: no page number; 8: smaller, even top / bottom
+-- 5: narrower margins, bigger bars; 6: font path that loads; 7: no page number;
+-- 8: smaller, even top / bottom; 9: % of the book on the right
+Reader.STYLE_VERSION = 9
 
 -- Global defaults for new books (KOReader stores them as copt_<option>).
 local TYPOGRAPHY = {
@@ -41,7 +43,7 @@ local FOOTER_ITEMS = {
     "chapter_progress", "frontlight_warmth", "custom_text", "dynamic_filler", "dynamic_filler2",
     "additional_content",
 }
-local FOOTER_ON = { chapter_time_to_read = true, dynamic_filler = true } -- no page number
+local FOOTER_ON = { chapter_time_to_read = true, dynamic_filler = true, percentage = true } -- no page number
 
 local function copy(t)
     if type(t) ~= "table" then return t end
@@ -105,7 +107,8 @@ function Reader.applyStyle(force)
     footer.text_font_bold = false
     footer.container_height = 24          -- unscaled; room above and below the text
     footer.container_bottom_padding = 12  -- keeps the text off the bottom edge
-    footer.order = { "chapter_time_to_read", "dynamic_filler" }
+    -- time left on the left, % of the book on the right
+    footer.order = { "chapter_time_to_read", "dynamic_filler", "percentage" }
     G_reader_settings:saveSetting("footer", footer)
 
     for k, v in pairs(TYPOGRAPHY) do
@@ -523,6 +526,15 @@ function Reader.attach(ui)
                     return timeLeftText(f) or ""
                 end
                 return original(f)
+            end
+            -- "64%": no icon, no decimals, rounded like the reading menu
+            local original_pct = map.percentage
+            map.percentage = function(f)
+                if not Prefs.get("reader_style") then return original_pct(f) end
+                local total = 0
+                pcall(function() total = f.ui.document:getPageCount() end)
+                if not f.pageno or total <= 0 then return "" end
+                return string.format("%d%%", math.floor(f.pageno / total * 100 + 0.5))
             end
             map._minimalhome = true
         end

@@ -144,23 +144,26 @@ end
 
 --- Ask GitHub what the newest build is. Quiet: no message either way.
 --- every = seconds since the last check before asking again. done(found) runs after a check.
-function U.check(every, done)
-    if U.busy then return end
-    local W = require("mh/wifi")
-    if not W.isConnected() then return end
+--- Should we ask GitHub now? (Wi-Fi on, nothing under way, not asked within `every` seconds)
+local function due(every)
+    if U.busy then return false end
+    if not require("mh/wifi").isConnected() then return false end
     local now = os.time()
     local last = tonumber(Prefs.get("update_checked_at")) or 0
-    if now - last < (every or U.HOME_EVERY) and now >= last then return end
-    U.busy = true
-    local m, err = U.fetchManifest()
-    U.busy = false
+    return not (now - last < (every or U.HOME_EVERY) and now >= last)
+end
+
+--- Remember what a check found. done(found, ok, changed): ok = GitHub answered;
+--- changed = the update on offer is not the one offered before.
+local function record(m, err, done)
+    local before = U.available()
     if not m then
         -- not remembered as checked: the next Home / Settings asks again
         logger.info("MinimalHome: update check failed:", err)
+        if done then done(before, false, false) end
         return
     end
-    Prefs.set("update_checked_at", now)
-    local before = U.available()
+    Prefs.set("update_checked_at", os.time())
     if U.newer(m.version, U.version()) then
         Prefs.set("update_found", m)
     else
@@ -168,18 +171,70 @@ function U.check(every, done)
     end
     local found = U.available()
     logger.info("MinimalHome: update check:", found and ("found " .. found.version) or "up to date")
-    if done and ((found and found.version) ~= (before and before.version)) then done(found) end
+    if done then done(found, true, (found and found.version) ~= (before and before.version)) end
 end
 
---- Check a moment after a screen has been painted, so the screen never waits on the network.
+--- Ask GitHub what the newest build is (blocking). Quiet: no message either way.
+function U.check(every, done)
+    if not due(every) then return false end
+    U.busy = true
+    local m, err = U.fetchManifest()
+    U.busy = false
+    record(m, err, done)
+    return true
+end
+
+--- Ask in a child process, so the screen never waits on the network (Kindles take
+--- seconds per HTTPS handshake). False when no check was started (no Wi-Fi, too soon).
 function U.checkSoon(every, done)
-    UIManager:scheduleIn(1, function()
-        local ok, err = pcall(U.check, every, done)
-        if not ok then
-            U.busy = false
-            logger.warn("MinimalHome: update check:", err)
+    if not due(every) then return false end
+    local ffiutil = require("ffi/util")
+    if not ffiutil.runInSubProcess then
+        UIManager:scheduleIn(1, function()
+            local ok, err = pcall(U.check, every, done)
+            if not ok then U.busy = false; logger.warn("MinimalHome: update check:", err) end
+        end)
+        return true
+    end
+    local pid, fd = ffiutil.runInSubProcess(function(_, child_fd)
+        local ok, m, err = pcall(U.fetchManifest)
+        local out
+        if ok and m then
+            out = table.concat({ "ok", m.version, m.file, m.sha256, tostring(m.size or 0) }, "\t")
+        else
+            out = "error\t" .. tostring(ok and err or m)
         end
-    end)
+        ffiutil.writeToFD(child_fd, out, true)
+    end, true)
+    if not pid then return false end
+    U.busy = true
+    local started = os.time()
+    local function poll()
+        local done_ = ffiutil.isSubProcessDone(pid)
+        local waiting = fd and ffiutil.getNonBlockingReadSize(fd) ~= 0
+        if done_ or waiting then
+            local msg = fd and ffiutil.readAllFromFD(fd) or ""
+            if not done_ then ffiutil.isSubProcessDone(pid, true) end
+            U.busy = false
+            local v, file, sha, size = msg:match("^ok\t(%S+)\t(%S+)\t(%x+)\t(%d+)")
+            if v then
+                record({ version = v, file = file, sha256 = sha, size = tonumber(size), channel = U.channel() }, nil, done)
+            else
+                record(nil, msg:match("^error\t(.*)") or "no answer", done)
+            end
+            return
+        end
+        if os.time() - started > 90 then
+            ffiutil.terminateSubProcess(pid)
+            if fd then ffiutil.readAllFromFD(fd) end
+            U.busy = false
+            record(nil, "timed out", done)
+            return
+        end
+        UIManager:scheduleIn(0.5, poll)
+    end
+    UIManager:scheduleIn(0.5, poll)
+    return true
 end
 
 -- Installing ---------------------------------------------------------------------------------

@@ -274,10 +274,63 @@ function Settings:show()
     return Page.show(self)
 end
 
+--- Check update: ask GitHub now, whatever the last check. A newer build shows its
+--- card at the top (the page scrolls up to it); otherwise "Up to date" for a moment.
+function Settings:checkNow()
+    if self.check_state == "checking" or Updater.job then return end
+    local snack = require("mh/ui/snackbar")
+    if not require("mh/wifi").isConnected() then
+        snack.show("Connect to Wi-Fi to check")
+        return
+    end
+    if Updater.busy then
+        -- an automatic check is under way: wait for it, then ask again
+        self.check_state = "checking"
+        self:refresh()
+        UIManager:scheduleIn(0.5, function()
+            if self.closed then return end
+            self.check_state = nil
+            self:checkNow()
+        end)
+        return
+    end
+    local started = Updater.checkSoon(0, function(found, ok)
+        if self.closed then return end
+        if not ok then
+            self.check_state = nil
+            self:refresh()
+            snack.show("Couldn’t check for updates")
+            return
+        end
+        if found then
+            self.check_state = nil
+            self:layout()
+            self:scrollBy(-self.viewport.scroll) -- up to the "Update available" card
+            UIManager:setDirty(self, "ui")
+            return
+        end
+        self.check_state = "done"
+        self:refresh()
+        UIManager:scheduleIn(3, function()
+            if not self.closed and self.check_state == "done" then
+                self.check_state = nil
+                self:refresh()
+            end
+        end)
+    end)
+    if not started then
+        snack.show("Couldn’t check for updates")
+        return
+    end
+    self.check_state = "checking"
+    self:refresh()
+end
+
 --- Wi-Fi just connected (e.g. after waking): look for a new build now.
 function Settings:onNetworkConnected()
     self:refresh()
-    Updater.checkSoon(Updater.SETTINGS_EVERY, function() if not self.closed then self:refresh() end end)
+    Updater.checkSoon(Updater.SETTINGS_EVERY,
+        function(_, _, changed) if changed and not self.closed then self:refresh() end end)
 end
 
 function Settings:onCloseWidget()
@@ -330,6 +383,12 @@ function Settings:blocks()
     local device = {
         { label = "Sleep after", sub = "When not in use", value = D.sleepLabel(D.sleepMinutes()),
           action = function() D.cycleSleep(ui); self:refresh() end },
+        { label = "Version " .. Updater.version(),
+          sub = self.check_state == "done" and "Up to date · checked just now"
+              or (Updater.channelName() .. " · " .. deviceName()),
+          button = self.check_state == "checking" and "Checking…" or "Check update",
+          button_muted = self.check_state == "checking",
+          action = function() self:checkNow() end },
     }
     if ui and ui.menu then
         table.insert(device, { label = "All KOReader settings", sub = "The full KOReader menu",
@@ -350,9 +409,6 @@ function Settings:blocks()
                 C.space(gap, 1),
                 self:button("⇥  Exit to Kindle", half, function() D.exitKOReader(ui) end),
             },
-            C.space(1, px(24)),
-            C.text("Version " .. Updater.version() .. " · " .. Updater.channelName() .. " · " .. deviceName(),
-                "sans_medium", 28, self.col.muted),
         }
     end)
     return list
@@ -374,8 +430,8 @@ function Settings.openPage(ui, opts)
     end
     logger.info("MinimalHome: Settings shown")
     -- a new build on GitHub? (only with Wi-Fi on; the card appears when it is found)
-    Updater.checkSoon(Updater.SETTINGS_EVERY, function()
-        if not page.closed then page:refresh() end
+    Updater.checkSoon(Updater.SETTINGS_EVERY, function(_, _, changed)
+        if changed and not page.closed then page:refresh() end
     end)
     return page
 end

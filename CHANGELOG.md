@@ -37,6 +37,14 @@ next push.
   the next Home / Settings instead of an hour later; Settings also checks when
   Wi-Fi connects. The dev pre-release is no longer deleted on each build and
   keeps its three newest zips
+- Reading: the % of the book read sits at the bottom right, opposite the time left
+- The grabber at the top edge (pull down for the quick panel) is a blunt "V" on
+  Home, Settings, the other pages and the reading menu; the bar at the bottom
+  (swipe up for Home) stays straight
+- Settings › Device: *Version* row with a *Check update* button to look for a new
+  build right away; the version line at the bottom of Settings is gone
+- Update checks run in the background, so Home and Settings never wait on the
+  network
 - Two update channels, set by how the plugin was built: official releases
   (Stable) and test builds from the `dev` branch (Dev). The Settings footer
   shows which one
