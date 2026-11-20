@@ -326,7 +326,8 @@ function Reader.registerMenuZones(ui)
             -- swipe down from the top edge: quick settings
             id = "minimalhome_quickpanel",
             ges = "swipe",
-            -- as tall as KOReader's own menu swipe zone and its centre extension (1/5)
+            -- the zone covers the edge strip plus the 150 px pull; Reader.edgePull
+            -- only takes gestures that started in the strip
             screen_zone = { ratio_x = 0, ratio_y = 0, ratio_w = 1, ratio_h = 1 / 5 },
             overrides = { "readermenu_swipe", "readermenu_ext_swipe" },
             handler = function(ges) return Reader.pullDown(ui, ges) end,
@@ -343,7 +344,7 @@ function Reader.registerMenuZones(ui)
             -- swipe up from the bottom edge: back to Home (like an iPhone's home bar)
             id = "minimalhome_home_swipe",
             ges = "swipe",
-            -- as tall as KOReader's own bottom menu zone and its centre extension (1/5)
+            -- the zone covers the edge strip plus the 150 px pull (see Reader.edgePull)
             screen_zone = { ratio_x = 0, ratio_y = 4 / 5, ratio_w = 1, ratio_h = 1 / 5 },
             overrides = { "readerconfigmenu_swipe", "readerconfigmenu_ext_swipe" },
             handler = function(ges) return Reader.pullUp(ui, ges) end,
@@ -398,9 +399,29 @@ function Reader.showQuickPanel(ui)
     }:show()
 end
 
+--- Edge gestures, as on Settings and the other pages: they start in a thin strip
+--- along the edge (around the grabber) and need a 150 px pull. Returns "go" when
+--- the pull is long enough, "wait" while a drag from the strip is still short
+--- (it is ours: nothing else may act on it), nil when it did not start at the edge.
+function Reader.edgePull(ges, edge)
+    local Screen = require("device").screen
+    local Page = require("mh/ui/page")
+    local start = ges.start_pos or ges.pos -- a swipe's pos is where it started
+    if not start or not start.y then return nil end
+    local strip = Theme.px(Page.EDGE)
+    local from_edge
+    if edge == "top" then from_edge = start.y < strip
+    else from_edge = start.y >= Screen:getHeight() - strip end
+    if not from_edge then return nil end
+    return (ges.distance or 0) >= Theme.px(Page.PULL) and "go" or "wait"
+end
+
 --- Swipe or drag up from the bottom of the page: close the book, back to Home.
-function Reader.pullUp(ui, ges)
+function Reader.pullUp(ui, ges, checked)
     if not Prefs.get("reader_style") or not ges or ges.direction ~= "north" then return false end
+    local pull = checked and "go" or Reader.edgePull(ges, "bottom")
+    if not pull then return false end
+    if pull == "wait" then return true end
     if ui._minimalhome_leaving then return true end -- a drag sends many pans
     ui._minimalhome_leaving = true
     pcall(function() ui:handleEvent(require("ui/event"):new("HandledAsSwipe")) end)
@@ -413,8 +434,12 @@ function Reader.pullUp(ui, ges)
 end
 
 --- Swipe or drag down from the top of the page: our quick panel, not KOReader's menu.
-function Reader.pullDown(ui, ges)
+function Reader.pullDown(ui, ges, checked)
     if not Prefs.get("reader_style") or not ges or ges.direction ~= "south" then return false end
+    local pull = checked and "go" or Reader.edgePull(ges, "top")
+    if not pull then return false end
+    if pull == "wait" then return true end
+    if Reader._panel_open then return true end -- a drag sends many pans
     -- never let the panel take the reader down
     local ok, err = pcall(Reader.showQuickPanel, ui)
     if not ok then

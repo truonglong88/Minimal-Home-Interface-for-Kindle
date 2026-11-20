@@ -29,7 +29,8 @@ next push.
 - Swipe up for Home / pull down for the quick panel on Settings, Contents and the
   other pages (and the pull-down on Home): only from a thin strip at the edge,
   around the grabber, and only after a 150 px pull. Scrolling a list near the
-  bottom no longer jumps Home
+  bottom no longer jumps Home. The same rule applies while reading and with the
+  reading menu open
 - Two update channels, set by how the plugin was built: official releases
   (Stable) and test builds from the `dev` branch (Dev). The Settings footer
   shows which one

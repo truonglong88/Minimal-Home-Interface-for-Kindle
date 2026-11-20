@@ -288,20 +288,20 @@ function ReaderMenu:previewAtX(x)
     UIManager:setDirty(self, "ui", self.bottom_rect)
 end
 
---- Swipe down from the top third: quick panel. Swipe up from the bottom third: Home.
---- (Same gestures as on the page; the menu used to swallow them.)
-function ReaderMenu:pullGesture(start_y, direction)
-    local h = self.dimen.h
-    if direction == "south" and start_y < h / 3 then
-        self:close()
-        UIManager:nextTick(function() require("mh/reader").pullDown(self.ui, { direction = "south" }) end)
-        return true
-    elseif direction == "north" and start_y > h * 2 / 3 then
-        self:close()
-        UIManager:nextTick(function() require("mh/reader").pullUp(self.ui, { direction = "north" }) end)
-        return true
+--- Pull down from the top edge: quick panel. Pull up from the bottom edge: Home.
+--- Same rule as on the page (Reader.edgePull): from the edge strip, 150 px.
+function ReaderMenu:pullGesture(ges, direction)
+    local Reader = require("mh/reader")
+    local pull = Reader.edgePull(ges, direction == "south" and "top" or "bottom")
+    if pull == "wait" then return true end
+    if pull ~= "go" or self.closed then return false end
+    self:close()
+    if direction == "south" then
+        UIManager:nextTick(function() Reader.pullDown(self.ui, { direction = "south" }, true) end)
+    else
+        UIManager:nextTick(function() Reader.pullUp(self.ui, { direction = "north" }, true) end)
     end
-    return false
+    return true
 end
 
 function ReaderMenu:onMHPan(_, ges)
@@ -314,7 +314,7 @@ function ReaderMenu:onMHPan(_, ges)
     -- a slow drag down from the top / up from the bottom
     local dy = ges.relative and ges.relative.y or 0
     if ges.start_pos and math.abs(dy) > px(60) then
-        return self:pullGesture(ges.start_pos.y, dy > 0 and "south" or "north")
+        return self:pullGesture(ges, dy > 0 and "south" or "north")
     end
     return false
 end
@@ -332,7 +332,7 @@ function ReaderMenu:onMHSwipe(_, ges)
         return true
     end
     if ges and ges.pos and (ges.direction == "south" or ges.direction == "north") then
-        return self:pullGesture(ges.pos.y, ges.direction)
+        return self:pullGesture(ges, ges.direction)
     end
     return false
 end

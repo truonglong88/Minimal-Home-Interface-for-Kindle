@@ -104,6 +104,13 @@ for _, o in ipairs(up and up.overrides or {}) do upo[o] = true end
 check(upo.readerconfigmenu_swipe and upo.readerconfigmenu_ext_swipe, "swipe-up overrides KOReader's bottom menu")
 check(by_id.minimalhome_home_pan and by_id.minimalhome_home_pan.ges == "pan", "drag-up zone")
 check(up.handler({ direction = "south" }) == false, "swipe down at the bottom is left alone")
+do
+    local H = require("device").screen:getHeight()
+    check(up.handler({ direction = "north", pos = { x = 600, y = H - 250 }, distance = 300 }) == false,
+        "swipe up that starts above the edge strip is left alone")
+    check(up.handler({ direction = "north", pos = { x = 600, y = H - 20 }, distance = 100 }) == true
+        and not ui._minimalhome_leaving, "a short pull from the bottom edge waits")
+end
 -- swipe down from the top while reading opens the quick panel without an error
 do
     local UIManager = require("ui/uimanager")
@@ -115,7 +122,12 @@ do
     logger.err = function(...) errs[#errs + 1] = table.concat({ ... }, " ") end
     local qz = zones[3]
     check(qz.id == "minimalhome_quickpanel", "quick panel zone registered")
-    check(qz.handler({ direction = "south" }) == true, "swipe down handled")
+    -- only from the strip along the top edge, and only after a 150 px pull
+    check(qz.handler({ direction = "south", pos = { x = 600, y = 400 }, distance = 400 }) == false,
+        "swipe down from the middle of the page is left alone")
+    check(qz.handler({ direction = "south", pos = { x = 600, y = 20 }, distance = 80 }) == true and not shown,
+        "a short pull from the edge waits")
+    check(qz.handler({ direction = "south", pos = { x = 600, y = 20 }, distance = 200 }) == true, "swipe down handled")
     check(#errs == 0, "quick panel opened in the reader without error: " .. tostring(errs[1]))
     check(shown and shown.panel_h, "quick panel shown")
     UIManager.show, logger.err = orig, orig_err
