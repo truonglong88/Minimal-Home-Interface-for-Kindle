@@ -58,6 +58,17 @@ function Viewport:update()
     end
 end
 
+--- Taps and holds outside the window are not ours: a row half scrolled under the
+--- fixed header must not catch a tap meant for "‹ Back" above it.
+function Viewport:handleEvent(event)
+    local ges = event.args and event.args[1]
+    if type(ges) == "table" and ges.pos and ges.pos.x and self.dimen then
+        local d, p = self.dimen, ges.pos
+        if p.y < d.y or p.y >= d.y + d.h or p.x < d.x or p.x >= d.x + d.w then return false end
+    end
+    return WidgetContainer.handleEvent(self, event)
+end
+
 function Viewport:scrollTo(offset)
     offset = math.max(0, math.min(self:maxScroll(), math.floor(offset + 0.5)))
     if offset == self.scroll then return false end

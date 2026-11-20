@@ -361,6 +361,9 @@ function Page:goHome()
     pages[1]:close()
     local ui = self.ui
     if ui and not ui.file_chooser and ui.handleEvent then
+        -- from a book (Contents): the rest of the swipe must not scroll Home once it is up
+        ui._minimalhome_leaving = true
+        pcall(function() require("device").input:inhibitInputUntil(true) end)
         ui:handleEvent(require("ui/event"):new("Home"))
     end
 end

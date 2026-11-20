@@ -340,7 +340,25 @@ check("contents page", function()
     local y = c2.view_top + b.y + b.h / 2 - c2.viewport.scroll
     local H = require("device").screen:getHeight()
     assert(math.abs(y - H * 2 / 3) < 4, "current chapter at 2/3: " .. y)
+    -- a row half hidden under the header must not catch the tap on "‹ Back"
+    local Theme = require("mh/theme")
+    c2.viewport:scrollTo(b.y + math.floor(b.h / 2))
     paint(c2)
+    local events = {}
+    ui.handleEvent = function(_, ev) events[#events + 1] = ev.handler end
+    local Geom = require("ui/geometry")
+    local Event = require("ui/event")
+    local UIManager = require("ui/uimanager")
+    local orig_tick = UIManager.nextTick
+    local ticks = {}
+    UIManager.nextTick = function(_, f) ticks[#ticks + 1] = f end
+    c2:handleEvent(Event:new("Gesture", { ges = "tap",
+        pos = Geom:new{ x = Theme.px(Theme.margin_h) + Theme.px(60), y = c2.view_top - math.floor(b.h / 4), w = 0, h = 0 } }))
+    UIManager.nextTick = orig_tick
+    for _, f in ipairs(ticks) do f() end
+    assert(c2.closed, "Back closes the contents")
+    for _, h in ipairs(events) do assert(h ~= "onGotoPage" and h ~= "onGotoXPointer", "tap went through to a row: " .. h) end
+    assert(Contents.swipe_home, "swipe up goes Home from the contents")
 end)
 
 if io.open("frontend/ui/data/keyboardlayouts/vi_keyboard.lua") then

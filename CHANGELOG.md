@@ -17,6 +17,10 @@ next push.
   downloads it, checks its checksum, installs it and restarts KOReader; if
   anything fails the old version stays. Checked only when Wi-Fi is already on
   and Home or Settings opens (at most once an hour from Home)
+- Fix: tapping *‹ Back* on Contents could also open the chapter half hidden under
+  the header, so the book jumped to an earlier page (the same applied to every
+  scrolling page)
+- Contents: swipe up from the bottom edge goes Home, as on Settings
 - Two update channels, set by how the plugin was built: official releases
   (Stable) and test builds from the `dev` branch (Dev). The Settings footer
   shows which one

@@ -21,6 +21,8 @@ local px = Theme.px
 local Contents = Page:extend{
     title = "Contents",
     back_label = "Back",
+    back_to_top = false,
+    swipe_home = true, -- swipe up from the bottom edge: Home
     ui = nil,
 }
 
@@ -55,6 +57,7 @@ end
 function Contents:init()
     local ui = self.ui
     self.entries = Contents.entries(ui)
+    require("logger").info("MinimalHome: contents:", #self.entries, "entries")
     local page, total = 1, 1
     pcall(function() page = ui:getCurrentPage() end)
     pcall(function() total = ui.document:getPageCount() end)
