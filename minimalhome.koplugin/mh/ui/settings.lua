@@ -274,6 +274,12 @@ function Settings:show()
     return Page.show(self)
 end
 
+--- Wi-Fi just connected (e.g. after waking): look for a new build now.
+function Settings:onNetworkConnected()
+    self:refresh()
+    Updater.checkSoon(Updater.SETTINGS_EVERY, function() if not self.closed then self:refresh() end end)
+end
+
 function Settings:onCloseWidget()
     Updater.listeners[self] = nil
     Page.onCloseWidget(self)

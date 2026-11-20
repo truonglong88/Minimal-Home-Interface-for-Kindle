@@ -34,13 +34,24 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build zip
         run: sh tools/package.sh --no-bump --channel dev
-      - name: Replace the dev pre-release
+      - name: Update the dev pre-release
         env:
           GH_TOKEN: ${{ github.token }}
+        # Never delete the release: a Kindle may be downloading from it right now.
+        # The zip goes up first, latest.json last; the three newest zips are kept, so
+        # a Kindle that read an older latest.json can still finish its download.
         run: |
           VERSION="$(sed -n 's/.*version = "\(.*\)".*/\1/p' minimalhome.koplugin/_meta.lua)"
-          gh release delete dev --cleanup-tag --yes || true
-          gh release create dev dist/*.zip dist/latest.json \
-            --prerelease --target "$GITHUB_SHA" \
-            --title "Dev build $VERSION" \
-            --notes "Test build $VERSION from the dev branch (${GITHUB_SHA::7}). Not an official release. Kindles on the Dev channel offer it in Settings."
+          NOTES="Test build $VERSION from the dev branch (${GITHUB_SHA::7}). Not an official release. Kindles on the Dev channel offer it in Settings."
+          if gh release view dev >/dev/null 2>&1; then
+            gh release upload dev "dist/minimalhome-$VERSION.zip" --clobber
+            gh release upload dev dist/latest.json --clobber
+            git tag -f dev "$GITHUB_SHA"
+            git push -f origin refs/tags/dev
+            gh release edit dev --title "Dev build $VERSION" --notes "$NOTES" --prerelease
+          else
+            gh release create dev "dist/minimalhome-$VERSION.zip" dist/latest.json \
+              --prerelease --target "$GITHUB_SHA" --title "Dev build $VERSION" --notes "$NOTES"
+          fi
+          gh release view dev --json assets --jq '.assets[].name' | grep '^minimalhome-.*\.zip$' \
+            | sort -V | head -n -3 | while read -r old; do gh release delete-asset dev "$old" --yes; done

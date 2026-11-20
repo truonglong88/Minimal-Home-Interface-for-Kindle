@@ -124,6 +124,24 @@ end
 
 -- Checking -----------------------------------------------------------------------------------
 
+--- latest.json as it is on GitHub right now, or nil and a reason. Blocking.
+--- Kindles are slow at HTTPS handshakes: be patient, and try twice.
+function U.fetchManifest()
+    local chunks, ok, err
+    for _ = 1, 2 do
+        ok, err = get(U.manifestUrl(), function()
+            chunks = {}
+            return require("ltn12").sink.table(chunks)
+        end, 15, 30)
+        if ok then break end
+    end
+    if not ok then return nil, err end
+    local m = decodeJSON(table.concat(chunks))
+    if not validManifest(m) then return nil, "bad latest.json" end
+    return { version = m.version, file = m.file, sha256 = m.sha256:lower(), size = tonumber(m.size),
+        channel = U.channel() }
+end
+
 --- Ask GitHub what the newest build is. Quiet: no message either way.
 --- every = seconds since the last check before asking again. done(found) runs after a check.
 function U.check(every, done)
@@ -133,28 +151,18 @@ function U.check(every, done)
     local now = os.time()
     local last = tonumber(Prefs.get("update_checked_at")) or 0
     if now - last < (every or U.HOME_EVERY) and now >= last then return end
-    Prefs.set("update_checked_at", now)
     U.busy = true
-    local chunks = {}
-    local ok, err = get(U.manifestUrl(), function()
-        chunks = {}
-        return require("ltn12").sink.table(chunks)
-    end, 4, 10)
+    local m, err = U.fetchManifest()
     U.busy = false
-    if not ok then
+    if not m then
+        -- not remembered as checked: the next Home / Settings asks again
         logger.info("MinimalHome: update check failed:", err)
         return
     end
-    local m = decodeJSON(table.concat(chunks))
-    if not validManifest(m) then
-        logger.warn("MinimalHome: update check: bad latest.json")
-        return
-    end
-    m.channel = U.channel()
+    Prefs.set("update_checked_at", now)
     local before = U.available()
     if U.newer(m.version, U.version()) then
-        Prefs.set("update_found", { version = m.version, file = m.file, sha256 = m.sha256:lower(),
-            size = tonumber(m.size), channel = m.channel })
+        Prefs.set("update_found", m)
     else
         Prefs.set("update_found", nil)
     end
@@ -271,6 +279,10 @@ end
 function U.prepare(m)
     local p = paths()
     os.remove(p.zip)
+    -- the build found earlier may have been replaced on GitHub since (Dev builds come
+    -- often): take whatever latest.json says now, if it is still newer than this one
+    local now = U.fetchManifest()
+    if now and U.newer(now.version, U.version()) then m = now end
     local ok, err = download(m, p.zip)
     if ok then ok, err = unpack(p.zip, p.fresh) end
     os.remove(p.zip)
@@ -280,7 +292,7 @@ function U.prepare(m)
         require("ffi/util").purgeDir(p.fresh)
         return nil, "the new build says it is " .. tostring(meta and meta.version)
     end
-    return true
+    return true, m
 end
 
 --- Put the unpacked build in place of the running one. KOReader must restart after.
@@ -307,9 +319,9 @@ end
 
 --- Blocking install (download + swap), for tests and tools.
 function U.install(m)
-    local ok, err = U.prepare(m)
-    if not ok then return nil, err end
-    return U.swap(m)
+    local ok, res = U.prepare(m)
+    if not ok then return nil, res end
+    return U.swap(res)
 end
 
 -- U.job: the download under way { m, pid, fd, pct }; U.ready: unpacked, waiting to be swapped in.
@@ -349,8 +361,8 @@ function U.start(m)
     local zip = paths().zip
     os.remove(zip)
     local pid, fd = ffiutil.runInSubProcess(function(_, child_fd)
-        local ok, res, err = pcall(U.prepare, m)
-        local msg = (ok and res) and "ok" or ("error: " .. tostring(ok and err or res))
+        local ok, res, got = pcall(U.prepare, m)
+        local msg = (ok and res) and ("ok " .. got.version) or ("error: " .. tostring(ok and got or res))
         ffiutil.writeToFD(child_fd, msg, true)
     end, true)
     if not pid then return nil, "could not start the download" end
@@ -365,8 +377,12 @@ function U.start(m)
             local msg = fd and ffiutil.readAllFromFD(fd) or ""
             if not done then ffiutil.isSubProcessDone(pid, true) end
             U.job = nil
-            if msg == "ok" then
-                U.ready = m
+            local got = msg:match("^ok (%S+)$")
+            if got then
+                local ready = {}
+                for k, v in pairs(m) do ready[k] = v end
+                ready.version = got -- a newer build may have replaced the one we started with
+                U.ready = ready
                 if not U.finish() then
                     -- reading: it goes in on the way back to Home
                     if U.ready then require("mh/ui/snackbar").show("Update ready · it installs when you go Home", 4) end

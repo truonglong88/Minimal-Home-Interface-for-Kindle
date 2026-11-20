@@ -31,6 +31,12 @@ next push.
   around the grabber, and only after a 150 px pull. Scrolling a list near the
   bottom no longer jumps Home. The same rule applies while reading and with the
   reading menu open
+- Updates are sturdier: just before downloading, the device asks GitHub again for
+  the newest build (a Dev build found earlier may have been replaced since);
+  slower networks get more time and a second try; a failed check is retried at
+  the next Home / Settings instead of an hour later; Settings also checks when
+  Wi-Fi connects. The dev pre-release is no longer deleted on each build and
+  keeps its three newest zips
 - Two update channels, set by how the plugin was built: official releases
   (Stable) and test builds from the `dev` branch (Dev). The Settings footer
   shows which one
