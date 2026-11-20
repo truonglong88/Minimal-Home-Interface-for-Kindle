@@ -96,6 +96,7 @@ local function get(url, make_sink, block, total)
         end)
         socketutil:reset_timeout()
         if not ok then return nil, tostring(code) end
+        logger.info("MinimalHome: update GET", (url:match("^https?://([^/]+)")), "→", code)
         local loc = headers and (headers.location or headers.Location)
         if (code == 301 or code == 302 or code == 303 or code == 307 or code == 308) and loc then
             url = socket_url.absolute(url, loc)
@@ -174,6 +175,21 @@ function U.checkSoon(every, done)
 end
 
 -- Installing ---------------------------------------------------------------------------------
+--
+-- Downloading, checking and unpacking run in a child process, so the screen stays
+-- usable meanwhile (scroll, Back, swipe Home). Only the final swap of the two
+-- folders happens here, and then KOReader restarts.
+
+U.TIMEOUT = 300 -- seconds for the whole download
+
+local function paths()
+    local DataStorage = require("datastorage")
+    local here = Theme.plugin_dir
+    return {
+        zip = DataStorage:getDataDir() .. "/cache/minimalhome-update.zip",
+        here = here, fresh = here .. ".update", old = here .. ".old",
+    }
+end
 
 local function sha256File(path)
     local f = io.open(path, "rb")
@@ -188,37 +204,33 @@ local function sha256File(path)
     return append():lower()
 end
 
-local function download(m, progress)
-    local DataStorage = require("datastorage")
+local function download(m, path)
     local util = require("util")
-    local dir = DataStorage:getDataDir() .. "/cache"
-    util.makePath(dir)
-    local path = dir .. "/minimalhome-update.zip"
+    util.makePath(path:match("(.*)/"))
     local url = "https://github.com/" .. U.REPO .. "/releases/download/"
         .. (m.channel == "dev" and "dev" or ("v" .. m.version)) .. "/" .. m.file
     local size = tonumber(m.size)
-    local file, got, shown = nil, 0, -1
+    local file, got = nil, 0
+    local started = os.time()
     local ok, err = get(url, function()
         if file then file:close() end
         file = io.open(path, "wb")
-        got, shown = 0, -1
+        got = 0
         return function(chunk)
             if not file then return nil, "cannot write" end
             if not chunk then return 1 end
+            if os.time() - started > U.TIMEOUT then return nil, "took too long" end
             got = got + #chunk
-            if progress and size and size > 0 then
-                local pct = math.min(99, math.floor(got * 100 / size))
-                if pct >= shown + 5 then shown = pct; progress(pct) end
-            end
-            return file:write(chunk) and 1 or nil
+            if not file:write(chunk) then return nil, "disk full?" end
+            file:flush() -- the screen shows progress from the file's size
+            return 1
         end
-    end, 15, 180)
+    end, 20, U.TIMEOUT)
     if file then file:close() end
-    if not ok then os.remove(path); return nil, "download: " .. tostring(err) end
-    if size and got ~= size then os.remove(path); return nil, "size " .. got .. " ≠ " .. size end
-    local sum = sha256File(path)
-    if sum ~= m.sha256 then os.remove(path); return nil, "checksum mismatch" end
-    return path
+    if not ok then return nil, "download: " .. tostring(err) end
+    if size and got ~= size then return nil, "size " .. got .. " ≠ " .. size end
+    if sha256File(path) ~= m.sha256 then return nil, "checksum mismatch" end
+    return true
 end
 
 --- Unpack the zip (its root is minimalhome.koplugin/) into a folder next to the plugin.
@@ -255,38 +267,137 @@ local function unpack(zip, dest)
     return true
 end
 
---- Download, check and put the new build in place. progress(pct) while downloading.
---- True on success (KOReader must then restart); nil and a reason otherwise.
-function U.install(m, progress)
-    local ffiUtil = require("ffi/util")
-    local lfs = require("libs/libkoreader-lfs")
-    local here = Theme.plugin_dir
-    local fresh, old = here .. ".update", here .. ".old"
-    local zip, err = download(m, progress)
-    if not zip then return nil, err end
-    local ok
-    ok, err = unpack(zip, fresh)
-    os.remove(zip)
+--- Download, check and unpack next to the plugin (blocking: runs in the child).
+function U.prepare(m)
+    local p = paths()
+    os.remove(p.zip)
+    local ok, err = download(m, p.zip)
+    if ok then ok, err = unpack(p.zip, p.fresh) end
+    os.remove(p.zip)
     if not ok then return nil, err end
-    local meta = readMeta(fresh)
+    local meta = readMeta(p.fresh)
     if not meta or meta.version ~= m.version then
-        ffiUtil.purgeDir(fresh)
+        require("ffi/util").purgeDir(p.fresh)
         return nil, "the new build says it is " .. tostring(meta and meta.version)
     end
-    if lfs.attributes(old, "mode") then ffiUtil.purgeDir(old) end
-    ok, err = os.rename(here, old)
-    if not ok then ffiUtil.purgeDir(fresh); return nil, "rename: " .. tostring(err) end
-    ok, err = os.rename(fresh, here)
+    return true
+end
+
+--- Put the unpacked build in place of the running one. KOReader must restart after.
+function U.swap(m)
+    local ffiUtil = require("ffi/util")
+    local lfs = require("libs/libkoreader-lfs")
+    local p = paths()
+    if not lfs.attributes(p.fresh .. "/_meta.lua", "mode") then return nil, "nothing unpacked" end
+    if lfs.attributes(p.old, "mode") then ffiUtil.purgeDir(p.old) end
+    local ok, err = os.rename(p.here, p.old)
+    if not ok then ffiUtil.purgeDir(p.fresh); return nil, "rename: " .. tostring(err) end
+    ok, err = os.rename(p.fresh, p.here)
     if not ok then
-        os.rename(old, here)
-        ffiUtil.purgeDir(fresh)
+        os.rename(p.old, p.here)
+        ffiUtil.purgeDir(p.fresh)
         return nil, "rename: " .. tostring(err)
     end
-    ffiUtil.purgeDir(old)
+    ffiUtil.purgeDir(p.old)
     Prefs.set("update_found", nil)
-    Prefs.set("update_from", U.version())
     Prefs.set("update_to", m.version)
     G_reader_settings:flush()
+    return true
+end
+
+--- Blocking install (download + swap), for tests and tools.
+function U.install(m)
+    local ok, err = U.prepare(m)
+    if not ok then return nil, err end
+    return U.swap(m)
+end
+
+-- U.job: the download under way { m, pid, fd, pct }; U.ready: unpacked, waiting to be swapped in.
+U.listeners = {}
+
+local function notify()
+    for _, fn in pairs(U.listeners) do pcall(fn) end
+end
+
+local function readerOpen()
+    local ok, r = pcall(function() return require("apps/reader/readerui").instance end)
+    return ok and r ~= nil
+end
+
+--- Swap in the unpacked build and restart, unless a book is open (then on the way Home).
+function U.finish()
+    local m = U.ready
+    if not m or readerOpen() then return false end
+    U.ready = nil
+    local ok, err = U.swap(m)
+    if not ok then
+        logger.warn("MinimalHome: update failed:", err)
+        require("mh/ui/snackbar").show("Couldn’t update · still on " .. U.version(), 4)
+        notify()
+        return false
+    end
+    local fm = package.loaded["apps/filemanager/filemanager"]
+    require("mh/device").restartKOReader(fm and fm.instance)
+    return true
+end
+
+--- Start downloading in the background. Listeners (U.listeners) hear about progress and the end.
+function U.start(m)
+    if U.job or U.ready then return true end
+    local ffiutil = require("ffi/util")
+    local lfs = require("libs/libkoreader-lfs")
+    local zip = paths().zip
+    os.remove(zip)
+    local pid, fd = ffiutil.runInSubProcess(function(_, child_fd)
+        local ok, res, err = pcall(U.prepare, m)
+        local msg = (ok and res) and "ok" or ("error: " .. tostring(ok and err or res))
+        ffiutil.writeToFD(child_fd, msg, true)
+    end, true)
+    if not pid then return nil, "could not start the download" end
+    local job = { m = m, pid = pid, fd = fd, pct = 0, started = os.time() }
+    U.job = job
+    notify()
+    local function poll()
+        if U.job ~= job then return end
+        local done = ffiutil.isSubProcessDone(pid)
+        local waiting = fd and ffiutil.getNonBlockingReadSize(fd) ~= 0
+        if done or waiting then
+            local msg = fd and ffiutil.readAllFromFD(fd) or ""
+            if not done then ffiutil.isSubProcessDone(pid, true) end
+            U.job = nil
+            if msg == "ok" then
+                U.ready = m
+                if not U.finish() then
+                    -- reading: it goes in on the way back to Home
+                    if U.ready then require("mh/ui/snackbar").show("Update ready · it installs when you go Home", 4) end
+                    notify()
+                end
+            else
+                logger.warn("MinimalHome: update failed:", msg)
+                require("mh/ui/snackbar").show("Couldn’t update · still on " .. U.version(), 4)
+                notify()
+            end
+            return
+        end
+        if os.time() - job.started > U.TIMEOUT + 60 then
+            ffiutil.terminateSubProcess(pid)
+            if fd then ffiutil.readAllFromFD(fd) end
+            U.job = nil
+            logger.warn("MinimalHome: update failed: timed out")
+            require("mh/ui/snackbar").show("Couldn’t update · still on " .. U.version(), 4)
+            notify()
+            return
+        end
+        local size = lfs.attributes(zip, "size") or 0
+        local total = tonumber(m.size) or 0
+        local pct = total > 0 and math.min(99, math.floor(size * 100 / total)) or 0
+        if pct >= job.pct + 5 then -- every 5 %: e-ink refreshes are not free
+            job.pct = pct
+            notify()
+        end
+        UIManager:scheduleIn(0.5, poll)
+    end
+    UIManager:scheduleIn(0.5, poll)
     return true
 end
 

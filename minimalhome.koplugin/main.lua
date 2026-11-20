@@ -76,6 +76,10 @@ function MinimalHome:showHome()
         }
         UIManager:show(self.home, "flashui")
     end)
+    -- an update finished downloading while a book was open: put it in now
+    if ok and require("mh/updater").ready then
+        UIManager:scheduleIn(0.5, function() pcall(function() require("mh/updater").finish() end) end)
+    end
     if not ok then
         -- Never leave the user stuck: fall back to KOReader's file browser.
         logger.err("MinimalHome: could not show home screen:", err)

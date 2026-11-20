@@ -44,6 +44,10 @@ function Page:init()
             MHSwipe = { GestureRange:new{ ges = "swipe", range = range } },
             MHPan = { GestureRange:new{ ges = "pan", range = range } },
             MHPanRelease = { GestureRange:new{ ges = "pan_release", range = range } },
+            -- long-press the clock / battery strip: screenshot (as on Home and in a book)
+            MHShot = { GestureRange:new{ ges = "hold", range = function()
+                return Geom:new{ x = 0, y = 0, w = self.dimen.w, h = self.status_h or px(110) }
+            end } },
         }
     end
     if Device:hasKeys() then
@@ -180,6 +184,7 @@ function Page:layout()
     if self[1] then self[1]:free() end
     local status = C.statusBar(self:contentWidth(), self.col, 36, true, true)
     local back = self:backButton()
+    self.status_h = px(Theme.margin_top) + status:getSize().h
     local fixed = VerticalGroup:new{ align = "left", status, C.space(1, px(20)), back }
     local view_top = px(Theme.margin_top) + fixed:getSize().h + px(8)
     self.view_top = view_top
@@ -329,6 +334,15 @@ function Page:onMHSwipe(_, ges)
     if dir == "north" then self:scrollBy(dist) return true end
     if dir == "south" then self:scrollBy(-dist) return true end
     if dir == "east" then self:close() return true end -- swipe right: back
+end
+
+function Page:onMHShot()
+    local ui = self.ui
+    if not (ui and ui.screenshot) then
+        local fm = package.loaded["apps/filemanager/filemanager"]
+        ui = fm and fm.instance or ui
+    end
+    return require("mh/screenshot").take(ui)
 end
 
 function Page:onMHNextPage() self:scrollBy(self.viewport.h * 0.85) return true end

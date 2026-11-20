@@ -21,6 +21,11 @@ next push.
   the header, so the book jumped to an earlier page (the same applied to every
   scrolling page)
 - Contents: swipe up from the bottom edge goes Home, as on Settings
+- Updates download in the background: Settings stays usable (scroll, Back, swipe
+  Home) and shows the progress from the file as it arrives. If a book is open
+  when it finishes, it installs on the way back to Home
+- Long-press the clock strip to take a screenshot on Settings, Contents and the
+  other full pages too (as on Home and in a book)
 - Two update channels, set by how the plugin was built: official releases
   (Stable) and test builds from the `dev` branch (Dev). The Settings footer
   shows which one

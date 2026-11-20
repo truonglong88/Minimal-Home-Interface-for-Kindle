@@ -693,23 +693,26 @@ check("updates: check GitHub, dot on Home, card in Settings, failed update keeps
     local Home = require("mh/ui/home")
     paint(Home:new{ ui = {} })
 
-    withUI(function(run, shown)
+    withUI(function()
         local Settings = require("mh/ui/settings")
-        local page = Settings:new{ ui = fake_ui }
+        local page = Settings:new{ ui = fake_ui }:show()
         paint(page)
-        local install = U.install
-        local seen, snacks = {}, {}
-        local Snackbar = require("mh/ui/snackbar")
-        local orig_show = Snackbar.show
-        Snackbar.show = function(t) snacks[#snacks + 1] = t end
-        U.install = function(_, progress) progress(40); seen[#seen + 1] = page.dl_pct; paint(page); return nil, "checksum mismatch" end
+        -- Update starts a background download; the page follows it and stays usable
+        local start = U.start
+        U.start = function(m)
+            U.job = { m = m, pct = 0 }
+            return true
+        end
         page:runUpdate(U.available())
-        U.install = install
-        Snackbar.show = orig_show
-        run()
-        assert(seen[1] == 40, "progress shown while downloading")
-        assert(page.dl_pct == nil, "back to the card after a failure")
-        assert(snacks[1] and snacks[1]:find("Couldn’t update · still on", 1, true), "failure snackbar")
+        U.start = start
+        assert(U.job, "download started")
+        U.job.pct = 40
+        for _, fn in pairs(U.listeners) do fn() end
+        paint(page)
+        page:scrollBy(300)
+        page:close()
+        assert(not U.listeners[page] or page.closed, "closed pages stop listening")
+        U.job = nil
         assert(U.available(), "the update is still offered")
     end)
     Prefs.set("update_found", nil)

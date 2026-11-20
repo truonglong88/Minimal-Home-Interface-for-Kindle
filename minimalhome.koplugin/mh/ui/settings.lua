@@ -210,12 +210,14 @@ function Settings:updateBanner(m)
     local w = self:contentWidth()
     local border, pad_h, pad_v = px(4), px(36), px(30)
     local inner = w - 2 * border - 2 * pad_h
-    local downloading = self.dl_pct ~= nil
+    local job = Updater.job
+    local downloading = job ~= nil or Updater.ready ~= nil
+    local pct = Updater.ready and 100 or (job and job.pct or 0)
     local btn_w = px(220)
     local text_w = downloading and inner or (inner - btn_w - px(32))
     local title, sub
     if downloading then
-        title = "Downloading " .. m.version .. "… " .. self.dl_pct .. "%"
+        title = "Downloading " .. m.version .. "… " .. pct .. "%"
         sub = "KOReader restarts by itself when it’s done."
     else
         title = "Update available"
@@ -241,7 +243,7 @@ function Settings:updateBanner(m)
     local group = VerticalGroup:new{ align = "left", row }
     if downloading then
         table.insert(group, C.space(1, px(24)))
-        table.insert(group, C.progress(inner, px(16), self.dl_pct / 100,
+        table.insert(group, C.progress(inner, px(16), pct / 100,
             require("ffi/blitbuffer").gray(0.2), self.col.fg, px(8)))
     end
     local h = group:getSize().h + 2 * pad_v + 2 * border
@@ -251,37 +253,37 @@ function Settings:updateBanner(m)
             valign = "center" }) }
 end
 
+--- Update: the download runs in the background; this page (and any page opened
+--- later) follows its progress. The screen stays usable meanwhile.
 function Settings:runUpdate(m)
-    if self.dl_pct then return end
-    local snack = require("mh/ui/snackbar")
+    if Updater.job then return end
     if not require("mh/wifi").isConnected() then
-        snack.show("Connect to Wi-Fi to update")
+        require("mh/ui/snackbar").show("Connect to Wi-Fi to update")
         return
     end
-    local function show(pct)
-        self.dl_pct = pct
-        self:refresh()
-        UIManager:forceRePaint()
+    local ok, err = Updater.start(m)
+    if not ok then
+        logger.warn("MinimalHome: update failed:", err)
+        require("mh/ui/snackbar").show("Couldn’t update · still on " .. Updater.version(), 4)
     end
-    show(0)
-    local ok, err = Updater.install(m, show)
-    if ok then
-        show(100)
-        D.restartKOReader(self.ui)
-        return
-    end
-    logger.warn("MinimalHome: update failed:", err)
-    self.dl_pct = nil
     self:refresh()
-    snack.show("Couldn’t update · still on " .. Updater.version(), 4)
+end
+
+function Settings:show()
+    Updater.listeners[self] = function() if not self.closed then self:refresh() end end
+    return Page.show(self)
+end
+
+function Settings:onCloseWidget()
+    Updater.listeners[self] = nil
+    Page.onCloseWidget(self)
 end
 
 function Settings:blocks()
     local ui = self.ui
     local list = { function() return self:headerBlock() end }
-    local found = self.dl_pct and self.updating or Updater.available()
+    local found = (Updater.job and Updater.job.m) or Updater.ready or Updater.available()
     if found then
-        self.updating = found
         table.insert(list, function() return self:updateBanner(found) end)
     end
     local function section(label, rows) table.insert(list, function() return self:section(label, rows) end) end
