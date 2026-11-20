@@ -26,6 +26,10 @@ next push.
   when it finishes, it installs on the way back to Home
 - Long-press the clock strip to take a screenshot on Settings, Contents and the
   other full pages too (as on Home and in a book)
+- Swipe up for Home / pull down for the quick panel on Settings, Contents and the
+  other pages (and the pull-down on Home): only from a thin strip at the edge,
+  around the grabber, and only after a 150 px pull. Scrolling a list near the
+  bottom no longer jumps Home
 - Two update channels, set by how the plugin was built: official releases
   (Stable) and test builds from the `dev` branch (Dev). The Settings footer
   shows which one

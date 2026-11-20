@@ -714,10 +714,11 @@ function Home:scrollBy(dy)
 end
 
 -- A drag or flick down that starts on the status bar opens the quick panel.
-Home.PULL_MIN = 100 -- design px the finger must travel
+Home.PULL_MIN = 150 -- design px the finger must travel (as on Settings and the other pages)
 
-function Home:startsOnStatusBar(y)
-    return y and y < (self.view_top or px(140))
+--- The strip along the top edge (around the grabber): a pull down from here opens the quick panel.
+function Home.startsOnStatusBar(_, y)
+    return y and y < px(require("mh/ui/page").EDGE)
 end
 
 -- Slow drag: remember how far the finger has moved, scroll once on release.
@@ -762,7 +763,8 @@ function Home:onMHSwipe(_, ges)
     end
     self._pan_dy = nil
     local dir = ges and ges.direction
-    if dir == "south" and ges.pos and self:startsOnStatusBar(ges.pos.y) then
+    if dir == "south" and ges.pos and self:startsOnStatusBar(ges.pos.y)
+            and (ges.distance or 0) >= px(Home.PULL_MIN) then
         self:showQuickPanel()
         return true
     end

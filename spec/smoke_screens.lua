@@ -545,6 +545,24 @@ check("Settings: swipe up from the bottom edge goes Home; overlays close on slee
         run()
         assert(s1.closed and fp.closed, "both pages closed")
         UIManager._window_stack = nil
+        -- scrolling a list near the bottom is not "Home": only a 150 px pull from the edge strip is
+        local c2 = Settings:new{ ui = {} }
+        UIManager._window_stack = { { widget = c2 } }
+        c2:onMHSwipe(nil, { direction = "north", distance = 300, pos = { x = 500, y = H - 180 } })
+        run()
+        assert(not c2.closed, "a swipe that starts on the list scrolls it")
+        c2:onMHSwipe(nil, { direction = "north", distance = 100, pos = { x = 500, y = H - 30 } })
+        run()
+        assert(not c2.closed, "a short swipe from the edge scrolls")
+        c2:onMHPan(nil, { relative = { x = 0, y = -120 }, pos = { x = 500, y = H - 150 } })
+        c2:onMHPanRelease()
+        run()
+        assert(not c2.closed, "a short drag from the edge scrolls")
+        c2:onMHPan(nil, { relative = { x = 0, y = -160 }, pos = { x = 500, y = H - 30 - 160 } })
+        c2:onMHPanRelease()
+        run()
+        assert(c2.closed, "a 150 px drag from the edge strip goes Home")
+        UIManager._window_stack = nil
         local c = require("mh/ui/confirm"):new{ title = "x" }
         c:onSuspend()
         assert(c.closed, "confirm closes on sleep")

@@ -275,9 +275,14 @@ function Page:scrollBy(dy)
     end
 end
 
---- Bottom eighth of the screen: a swipe up from here goes Home.
+-- Edge gestures start in a thin strip around the grabbers drawn at the top and
+-- bottom edges, and need a real pull: a drag that starts on the list scrolls it.
+Page.EDGE = 70  -- design px from the edge
+Page.PULL = 150 -- design px to travel
+
+--- The strip along the bottom edge: a swipe up from here goes Home.
 function Page:fromBottomEdge(y)
-    return self.swipe_home and y and y >= self.dimen.h - math.floor(self.dimen.h / 8)
+    return self.swipe_home and y and y >= self.dimen.h - px(Page.EDGE)
 end
 
 function Page:onMHPan(_, ges)
@@ -288,9 +293,9 @@ function Page:onMHPan(_, ges)
     return true
 end
 
---- The status bar strip at the top: a pull down from here opens the quick panel.
+--- The strip along the top edge: a pull down from here opens the quick panel.
 function Page:fromTopEdge(y)
-    return self.swipe_home and y and y < (self.view_top or px(140))
+    return self.swipe_home and y and y < px(Page.EDGE)
 end
 
 function Page:showQuickPanel()
@@ -308,9 +313,9 @@ function Page:onMHPanRelease()
     if self._pan_dy then
         local dy, start = self._pan_dy, self._pan_start_y
         self._pan_dy, self._pan_start_y = nil, nil
-        if self:fromTopEdge(start) and dy > px(100) then
+        if self:fromTopEdge(start) and dy >= px(Page.PULL) then
             UIManager:nextTick(function() self:showQuickPanel() end)
-        elseif self:fromBottomEdge(start) and dy < -px(80) then
+        elseif self:fromBottomEdge(start) and dy <= -px(Page.PULL) then
             UIManager:nextTick(function() self:goHome() end)
         else
             self:scrollBy(-dy)
@@ -323,11 +328,12 @@ function Page:onMHSwipe(_, ges)
     self._pan_dy = nil
     local dir = ges and ges.direction
     local dist = (ges and ges.distance or 0) * Page.FLICK
-    if dir == "south" and ges.pos and self:fromTopEdge(ges.pos.y) then
+    local long = (ges and ges.distance or 0) >= px(Page.PULL)
+    if dir == "south" and long and ges.pos and self:fromTopEdge(ges.pos.y) then
         UIManager:nextTick(function() self:showQuickPanel() end)
         return true
     end
-    if dir == "north" and ges.pos and self:fromBottomEdge(ges.pos.y) then
+    if dir == "north" and long and ges.pos and self:fromBottomEdge(ges.pos.y) then
         UIManager:nextTick(function() self:goHome() end)
         return true
     end
