@@ -52,5 +52,9 @@ size, SHA-256, channel), which the in-app updater reads. The zip carries
 
 ## Release
 
-Update `CHANGELOG.md`, commit, then tag: `git tag vX.Y.Z && git push --tags`.
-GitHub Actions runs the tests, builds the zip and attaches it to a release.
+Move the *Unreleased* notes in `CHANGELOG.md` under a `## X.Y.Z – title` heading
+(X.Y.Z = the version in `_meta.lua`), commit on `dev`, then bring `main` up to
+`dev` and push it. `release.yml` runs the tests and, as no release exists for
+that version yet, publishes `vX.Y.Z` with the zip (Stable channel), `latest.json`
+and the CHANGELOG section as its notes. A release drafted by hand on GitHub, or a
+pushed `v*` tag, gets its zip the same way.
