@@ -44,6 +44,8 @@ function MinimalHome:init()
     pcall(function() require("mh/loadingbar").install() end)
     -- KOReader's own short messages look like our snackbar
     pcall(function() require("mh/messages").install() end)
+    -- low battery warnings (20 %: snackbar, 5 %: popup)
+    pcall(function() require("mh/battery").start() end)
     if isFileManager(self.ui) then
         -- the screen turns upside down with the device, never sideways
         pcall(function() require("mh/device").keepPortraitRotation(self.ui) end)
@@ -132,7 +134,14 @@ function MinimalHome:onResume()
     -- light switched off in the quick panel: the Kindle relights it on wake
     pcall(function() require("mh/device").keepLightOff() end)
     pcall(function() require("mh/wifi").wake() end)
+    pcall(function() require("mh/battery").start(2) end)
 end
+
+-- Charger plugged in or out: close the 5 % popup / re-check the level.
+function MinimalHome.onCharging()
+    UIManager:nextTick(function() pcall(function() require("mh/battery").check() end) end)
+end
+MinimalHome.onNotCharging = MinimalHome.onCharging
 
 function MinimalHome:onSuspend()
     if not isFileManager(self.ui) then require("mh/reader").onSuspend() end
@@ -141,6 +150,7 @@ function MinimalHome:onSuspend()
     pcall(function() require("mh/device").lightOffForSleep() end)
     -- Wi-Fi off while asleep; back on when waking if it was on
     pcall(function() require("mh/wifi").sleep() end)
+    pcall(function() require("mh/battery").stop() end)
 end
 
 function MinimalHome:addToMainMenu(menu_items)

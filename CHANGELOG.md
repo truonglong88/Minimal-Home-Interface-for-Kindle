@@ -45,6 +45,9 @@ next push.
   build right away; the version line at the bottom of Settings is gone
 - Update checks run in the background, so Home and Settings never wait on the
   network
+- Low battery warnings: at 20 % a snackbar "Battery low · 20%"; at 5 % a popup
+  that stays until *OK* is tapped (plugging in the charger closes it). Each is
+  shown once per discharge; nothing while charging
 - Two update channels, set by how the plugin was built: official releases
   (Stable) and test builds from the `dev` branch (Dev). The Settings footer
   shows which one

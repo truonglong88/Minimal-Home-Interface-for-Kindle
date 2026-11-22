@@ -41,7 +41,15 @@ function Confirm.card(opts, on_cancel, on_ok)
     local inner = card_w - 2 * px(56)
     local content = VerticalGroup:new{ align = "left" }
     if opts.title and opts.title ~= "" then
-        table.insert(content, C.textbox(opts.title, "serif_bold", 56, col.fg, inner, 3, 0.15, "left"))
+        if opts.title_icon then
+            -- an icon in front of the title (battery 5 % popup)
+            local icon = opts.title_icon
+            local gap = px(28)
+            local t = C.textbox(opts.title, "serif_bold", 56, col.fg, inner - icon:getSize().w - gap, 2, 0.15, "left")
+            table.insert(content, HorizontalGroup:new{ align = "center", icon, C.space(gap, 1), t })
+        else
+            table.insert(content, C.textbox(opts.title, "serif_bold", 56, col.fg, inner, 3, 0.15, "left"))
+        end
     end
     if opts.text and opts.text ~= "" then
         if #content > 0 then table.insert(content, C.space(1, px(24))) end
@@ -74,8 +82,17 @@ function Confirm:init()
     self.dimen = Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Screen:getHeight() }
     local range = function() return self.dimen end
     self.ges_events = { MHTapOutside = { GestureRange:new{ ges = "tap", range = range } } }
+    if self.sticky then
+        for _, g in ipairs({ "swipe", "pan", "pan_release", "hold", "hold_release" }) do
+            self.ges_events["MHSwallow_" .. g] = { GestureRange:new{ ges = g, range = range }, event = "MHSwallow" }
+        end
+    end
     if Device:hasKeys() then
         self.key_events = { Close = { { Device.input.group.Back } } }
+        if self.sticky then
+            -- page-turn buttons must not turn the page under a popup that waits for OK
+            self.key_events.MHSwallowKey = { { Device.input.group.PgFwd }, { Device.input.group.PgBack } }
+        end
     end
     local card, rect = Confirm.card(self,
         function() UIManager:nextTick(function() self:answer(false) end) end,
@@ -97,16 +114,24 @@ function Confirm:answer(ok)
     if cb then cb() end
 end
 
+function Confirm.onMHSwallowKey() return true end
+
+--- Swipes and drags under a sticky popup go nowhere.
+function Confirm.onMHSwallow() return true end
+
 function Confirm:onMHTapOutside(_, ges)
+    if self.sticky then return true end -- only its button closes it
     local p, r = ges and ges.pos, self.card_rect
     if p and not (p.x >= r.x and p.x < r.x + r.w and p.y >= r.y and p.y < r.y + r.h) then self:answer(false) end
     return true
 end
 
-function Confirm:onSuspend() self:answer(false) end
+function Confirm:onSuspend()
+    if not self.sticky then self:answer(false) end
+end
 
 function Confirm:onClose()
-    self:answer(false)
+    if not self.sticky then self:answer(false) end
     return true
 end
 

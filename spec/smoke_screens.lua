@@ -650,6 +650,56 @@ check("reading menu: ‹ › step a page, greyed at the ends", function()
     end)
 end)
 
+check("low battery: snackbar at 20 %, popup at 5 % that only OK closes", function()
+    withUI(function(run, shown)
+        local Device = require("device")
+        local p = Device:getPowerDevice()
+        local orig_cap, orig_chg = p.getCapacity, p.isCharging
+        local cap, chg = 50, false
+        p.getCapacity = function() return cap end
+        p.isCharging = function() return chg end
+        local Prefs = require("mh/data/prefs")
+        Prefs.set("battery_warned", nil)
+        local Snackbar = require("mh/ui/snackbar")
+        local orig_show = Snackbar.show
+        local snacks = {}
+        Snackbar.show = function(t) snacks[#snacks + 1] = t end
+        local B = require("mh/battery")
+        B.check()
+        assert(#snacks == 0 and not B.popup, "nothing at 50 %")
+        cap = 20; B.check()
+        assert(snacks[1] == "Battery low · 20%", tostring(snacks[1]))
+        cap = 19; B.check()
+        assert(#snacks == 1, "shown once")
+        cap = 5; B.check()
+        local pop = B.popup
+        assert(pop and pop.sticky and shown[#shown] == pop, "5 %: popup")
+        paint(pop)
+        local Geom = require("ui/geometry")
+        pop:onMHTapOutside(nil, { pos = Geom:new{ x = 5, y = 5, w = 0, h = 0 } })
+        pop:onClose()
+        pop:onSuspend()
+        assert(not pop.closed, "only OK closes it")
+        assert(pop:onMHSwallowKey(), "page buttons swallowed")
+        cap = 4; B.check()
+        assert(B.popup == pop, "not shown twice")
+        chg = true; B.check()
+        run()
+        assert(pop.closed and not B.popup, "charger closes it")
+        cap = 30; B.check()
+        assert(Prefs.get("battery_warned") == nil, "charged above 25 %: armed again")
+        chg = false; cap = 5; B.check()
+        local pop2 = B.popup
+        assert(pop2, "warns again on the next discharge")
+        pop2:answer(false)
+        run()
+        assert(pop2.closed and not B.popup, "OK closes it")
+        Snackbar.show = orig_show
+        p.getCapacity, p.isCharging = orig_cap, orig_chg
+        Prefs.set("battery_warned", nil)
+    end)
+end)
+
 check("battery shows a bolt while charging", function()
     local Device = require("device")
     local p = Device:getPowerDevice()

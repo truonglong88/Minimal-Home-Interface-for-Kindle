@@ -608,6 +608,20 @@ function Bolt:paintTo(bb, x, y)
 end
 C.Bolt = Bolt
 
+--- A battery drawn at any size (design: the battery 5 % popup): outline, nub,
+--- and a fill for `cap` percent. Square corners, as in the status bar.
+function C.batteryIcon(w, h, cap, color)
+    local HorizontalGroup = require("ui/widget/horizontalgroup")
+    local bt = math.max(1, math.floor(h * 0.16))
+    local inner = math.max(1, math.floor(h * 0.08))
+    local body_w = w - math.max(2, math.floor(w * 0.08))
+    local fill_w = math.max(1, math.floor((body_w - 2 * bt - 2 * inner) * (cap or 0) / 100))
+    local body = C.box(body_w, h, Rect:new{ w = fill_w, h = h - 2 * bt - 2 * inner, color = color },
+        { border = bt, border_color = color, pad = bt + inner })
+    return HorizontalGroup:new{ align = "center", body,
+        Rect:new{ w = w - body_w, h = math.floor(h * 0.42), color = color } }
+end
+
 --[[ Status bar: clock on the left, battery on the right (with a Wi-Fi icon in
      front of it when `wifi` is set and Wi-Fi is connected). ]]
 function C.statusBar(width, col, size, bold, wifi, clock_only)
