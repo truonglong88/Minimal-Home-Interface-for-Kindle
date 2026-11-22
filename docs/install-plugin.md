@@ -31,7 +31,7 @@ tar -C /tmp/mh -czf - minimalhome.koplugin | \
   "cd /mnt/us/koreader/plugins && rm -rf minimalhome.koplugin && tar -xzf -"
 ```
 
-3. Restart KOReader. *Settings* shows the installed version at the bottom.
+3. Restart KOReader. *Settings › Device* shows the installed version.
 
 Tar over SSH is used instead of `scp`, which hangs against KOReader's SSH
 server on some setups.

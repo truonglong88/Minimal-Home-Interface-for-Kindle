@@ -56,7 +56,7 @@ for where to read about them.
 - Kindle-only books (DRM'd AZW/KFX) are tagged instead of showing garbage
 
 **Reading**
-- Clean page: clock on top, *time left in chapter* at the bottom, even margins
+- Clean page: clock on top, *time left* and *% read* at the bottom, even margins
 - Tap the middle for the reading menu: page slider with ‹ › one-page steps,
   Contents, Go to page (number keypad), Font panel (font, size, line spacing,
   margins, alignment)
@@ -75,6 +75,7 @@ for where to read about them.
 - One message style (snackbar) and one confirm dialog, for KOReader's messages too
 - Battery care: Wi-Fi and the front light are switched off while the device
   sleeps and restored when it wakes
+- Low battery warnings at 20 % and 5 %
 
 More in [docs/features.md](docs/features.md).
 
@@ -124,8 +125,8 @@ image). See [docs/images/NOTICE.md](docs/images/NOTICE.md).
 ## Feedback
 
 - **Bug reports, ideas, questions:** [Discussions](https://github.com/truonglong88/Minimal-Home-Interface-for-Kindle/discussions). For a bug, say which
-  device, KOReader version and Minimal Home version (shown at the bottom of
-  Settings), what you did and what happened; a screenshot helps (hold the status
+  device, KOReader version and Minimal Home version (shown in Settings ›
+  Device), what you did and what happened; a screenshot helps (hold the status
   bar). Lines with `MinimalHome` from `koreader/crash.log` help most.
 - No promise of fixes, replies or new features: this is a personal project.
 - Issues are off and pull requests are closed automatically; forks are welcome.

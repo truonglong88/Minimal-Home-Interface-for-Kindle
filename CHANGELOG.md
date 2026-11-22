@@ -5,52 +5,43 @@
 Changes made since the last push to GitHub. They get the plugin version of the
 next push.
 
-- Contents: every chapter of long books is listed; rows are only drawn when they
-  scroll into view (faster to open, less battery). Titles wrap to two lines
-- Contents: the chapter being read opens two thirds of the way down the screen
-- Reading: tap the strip along the bottom edge (where the time left is written) to
-  switch time left in book / in chapter / nothing; it no longer turns the page
-- Fix: "time left in chapter" didn't show in a book's last chapter; books without
+## 0.1.44 – updates from the device, battery warnings
+
+**Updates over Wi-Fi**
+- When a newer version is on GitHub, a dot appears on Home's Settings button and
+  Settings shows *Update available*. *Update* downloads it in the background,
+  checks it, installs it and restarts KOReader; if anything fails, the old
+  version stays. If a book is open when it finishes, it installs on the way Home
+- Settings › Device: *Version* row with a *Check update* button
+- Checks only when Wi-Fi is already on and Home or Settings opens (at most once
+  an hour from Home), in the background: no screen waits on the network
+- Two channels, set by how the plugin was built: official releases (Stable) and
+  test builds from the `dev` branch (Dev)
+
+**Reading**
+- The % of the book read at the bottom right, opposite the time left
+- Tap the bottom strip to switch time left in book / in chapter / nothing; it no
+  longer turns the page
+- Contents: every chapter of long books is listed (rows drawn as they scroll into
+  view), titles wrap to two lines, the chapter being read opens two thirds of
+  the way down, swipe up from the bottom edge goes Home
+
+**Gestures and look**
+- Swipe up for Home and pull down for the quick panel only from a thin strip at
+  the edge and after a 150 px pull, everywhere (pages, Home, while reading, with
+  the reading menu open): scrolling a list no longer jumps Home
+- The top grabber is a blunt "V"; the bottom bar stays straight
+- Long-press the clock strip for a screenshot on every page
+
+**Battery**
+- At 20 % a snackbar "Battery low · 20%"; at 5 % a popup that stays until *OK*
+  is tapped (plugging in closes it). Once per discharge, never while charging
+
+**Fixes**
+- *‹ Back* on Contents (and any scrolling page) could also tap the row half
+  hidden under the header, so the book jumped to an earlier page
+- "Time left in chapter" didn't show in a book's last chapter; books without
   chapters skip that choice
-- Updates over Wi-Fi: when a newer build is on GitHub, a dot appears on Home's
-  Settings button and Settings shows an *Update available* card. *Update*
-  downloads it, checks its checksum, installs it and restarts KOReader; if
-  anything fails the old version stays. Checked only when Wi-Fi is already on
-  and Home or Settings opens (at most once an hour from Home)
-- Fix: tapping *‹ Back* on Contents could also open the chapter half hidden under
-  the header, so the book jumped to an earlier page (the same applied to every
-  scrolling page)
-- Contents: swipe up from the bottom edge goes Home, as on Settings
-- Updates download in the background: Settings stays usable (scroll, Back, swipe
-  Home) and shows the progress from the file as it arrives. If a book is open
-  when it finishes, it installs on the way back to Home
-- Long-press the clock strip to take a screenshot on Settings, Contents and the
-  other full pages too (as on Home and in a book)
-- Swipe up for Home / pull down for the quick panel on Settings, Contents and the
-  other pages (and the pull-down on Home): only from a thin strip at the edge,
-  around the grabber, and only after a 150 px pull. Scrolling a list near the
-  bottom no longer jumps Home. The same rule applies while reading and with the
-  reading menu open
-- Updates are sturdier: just before downloading, the device asks GitHub again for
-  the newest build (a Dev build found earlier may have been replaced since);
-  slower networks get more time and a second try; a failed check is retried at
-  the next Home / Settings instead of an hour later; Settings also checks when
-  Wi-Fi connects. The dev pre-release is no longer deleted on each build and
-  keeps its three newest zips
-- Reading: the % of the book read sits at the bottom right, opposite the time left
-- The grabber at the top edge (pull down for the quick panel) is a blunt "V" on
-  Home, Settings, the other pages and the reading menu; the bar at the bottom
-  (swipe up for Home) stays straight
-- Settings › Device: *Version* row with a *Check update* button to look for a new
-  build right away; the version line at the bottom of Settings is gone
-- Update checks run in the background, so Home and Settings never wait on the
-  network
-- Low battery warnings: at 20 % a snackbar "Battery low · 20%"; at 5 % a popup
-  that stays until *OK* is tapped (plugging in the charger closes it). Each is
-  shown once per discharge; nothing while charging
-- Two update channels, set by how the plugin was built: official releases
-  (Stable) and test builds from the `dev` branch (Dev). The Settings footer
-  shows which one
 
 ## 0.1.35 – first public release
 
