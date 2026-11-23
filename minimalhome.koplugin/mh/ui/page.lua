@@ -310,8 +310,10 @@ function Page:dragBar(y, final)
 end
 
 function Page:barReach(p)
-    return self.viewport and self.view_top and self.viewport:maxScroll() > 0
-        and C.onBar(p, self.dimen.w, self.view_top, self.dimen.h - px(Page.EDGE)) -- the edge strip stays Home
+    local vp = self.viewport
+    if not vp or not self.view_top or vp:maxScroll() <= 0 or vp.scroll <= 0 then return false end
+    if p and p.y and self:fromBottomEdge(p.y) then return false end -- the edge strip stays Home
+    return C.onThumb(p, self.dimen.w, self.view_top, self.dimen.h - self.view_top - px(48), vp)
 end
 
 function Page:onMHPan(_, ges)
@@ -367,9 +369,8 @@ end
 
 function Page:onMHSwipe(_, ges)
     self._pan_dy = nil
-    if ges and (ges.direction == "north" or ges.direction == "south") and self:barReach(ges.pos)
-            and not self:fromBottomEdge(ges.pos.y) and not self:fromTopEdge(ges.pos.y) then
-        -- a quick drag on the bar: jump to where the finger let go
+    if ges and (ges.direction == "north" or ges.direction == "south") and self:barReach(ges.pos) then
+        -- a quick drag that started on the thumb: the thumb goes where the finger let go
         local e = C.swipeEnd(ges)
         if e then self:dragBar(e.y, true) end
         return true

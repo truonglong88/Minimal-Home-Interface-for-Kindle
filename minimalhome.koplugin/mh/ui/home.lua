@@ -883,8 +883,10 @@ function Home:dragBar(y, final)
 end
 
 function Home:barReach(p)
-    return self.viewport and self.viewport:maxScroll() > 0
-        and C.onBar(p, self.dimen.w, self.view_top or px(Home.BAR_TOP), self.dimen.h - px(Home.BAR_BOTTOM))
+    local vp = self.viewport
+    if not vp or vp:maxScroll() <= 0 or vp.scroll <= 0 then return false end -- the bar shows once scrolled
+    local top = px(Home.BAR_TOP)
+    return C.onThumb(p, self.dimen.w, top, self.dimen.h - top - px(Home.BAR_BOTTOM), vp)
 end
 
 function Home:onMHPan(_, ges)
@@ -936,7 +938,7 @@ function Home:onMHSwipe(_, ges)
     end
     self._pan_dy = nil
     if ges and (ges.direction == "north" or ges.direction == "south") and self:barReach(ges.pos) then
-        -- a quick drag on the bar: jump to where the finger let go
+        -- a quick drag that started on the thumb: the thumb goes where the finger let go
         local e = C.swipeEnd(ges)
         if e then self:dragBar(e.y, true) end
         return true

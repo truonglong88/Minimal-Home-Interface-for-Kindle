@@ -29,8 +29,9 @@ next push.
   a folder that only holds other folders), so the series show at once
 - ‹ Back in a book opened from a folder returns to that folder (and the folders
   above it); swiping up still goes straight Home
-- Scrollbars can be dragged (Home, Settings, Contents, folders…): put a finger
-  on the right edge and the list follows it; a quick flick along the bar jumps
+- Scrollbars can be dragged (Home, Settings, Contents, folders…): grab the
+  thumb (the black part, once the list is scrolled) and the list follows it;
+  any other drag, even near the edge, scrolls as usual
 - Home: *Sync books* link next to ALL BOOKS reads the documents folder again
   (books copied over SSH or USB while Home is open) and says how many are new;
   the list stays where it was scrolled

@@ -616,16 +616,22 @@ C.Bolt = Bolt
 --[[ Dragging a scrollbar (Home, Settings, Contents…). The bar sits along the
      right edge between `top` and `bottom`; a drag that starts within reach of it
      moves the list so the thumb follows the finger. ]]
-C.BAR_REACH = 90 -- design px from the right edge where a drag grabs the bar
+C.BAR_REACH = 56 -- design px from the right edge where a drag can grab the thumb
+C.THUMB_SLOP = 48 -- design px above / below the thumb that still grab it
 
 --- Thumb height for a viewport, as the bars draw it.
 function C.barThumb(track_h, vp)
     return math.max(Theme.px(100), math.floor(track_h * vp.h / math.max(1, vp:totalHeight())))
 end
 
---- Is screen point p within reach of the bar?
-function C.onBar(p, screen_w, top, bottom_y)
-    return p and p.x and p.x >= screen_w - Theme.px(C.BAR_REACH) and p.y >= top and p.y <= bottom_y
+--- Is screen point p on the thumb (or just around it)? Only a drag that starts
+--- there moves the bar; anywhere else, even near the edge, scrolls as usual.
+function C.onThumb(p, screen_w, top, track_h, vp)
+    if not (p and p.x and p.y) or p.x < screen_w - Theme.px(C.BAR_REACH) then return false end
+    local thumb_h = C.barThumb(track_h, vp)
+    local y = top + math.floor((track_h - thumb_h) * vp.scroll / math.max(1, vp:maxScroll()))
+    local slop = Theme.px(C.THUMB_SLOP)
+    return p.y >= y - slop and p.y <= y + thumb_h + slop
 end
 
 --- Scroll offset that puts the thumb's middle under finger y.

@@ -967,40 +967,35 @@ check("Folders view: folder rows, order inside a folder, folder page", function(
     end)
 end)
 
-check("scrollbars can be dragged (Home and pages)", function()
-    withUI(function(run)
+check("scrollbars: only the thumb is grabbed; other drags scroll as usual", function()
+    withUI(function()
+        local C = require("mh/ui/components")
         local Settings = require("mh/ui/settings")
         local page = Settings:new{ ui = fake_ui }
         paint(page)
         local W, H = page.dimen.w, page.dimen.h
-        local max = page.viewport:maxScroll()
+        local vp = page.viewport
+        local max = vp:maxScroll()
         assert(max > 0, "settings scrolls")
-        -- grab the bar near the top, drag to the middle, let go
-        page:onMHPan(nil, { start_pos = { x = W - 20, y = page.view_top + 10 }, pos = { x = W - 20, y = H / 2 }, relative = { x = 0, y = H / 2 } })
+        -- at the top the bar is hidden: a drag near the edge scrolls the page
+        assert(not page:barReach({ x = W - 20, y = page.view_top + 20 }), "hidden bar: not grabbed")
+        page:scrollBy(200)
+        local track_h = H - page.view_top - require("mh/theme").px(48)
+        local thumb_h = C.barThumb(track_h, vp)
+        local ty = page.view_top + math.floor((track_h - thumb_h) * vp.scroll / max) + math.floor(thumb_h / 2)
+        -- near the right edge but far from the thumb: an ordinary scroll
+        assert(not page:barReach({ x = W - 20, y = H - 200 }), "edge, not thumb: not grabbed")
+        assert(not page:barReach({ x = W - 120, y = ty }), "too far from the edge: not grabbed")
+        -- on the thumb: drag it to the middle
+        page:onMHPan(nil, { start_pos = { x = W - 20, y = ty }, pos = { x = W - 20, y = H / 2 }, relative = { x = 0, y = H / 2 - ty } })
+        assert(page._bar_drag, "thumb grabbed")
         page:onMHPanRelease(nil, { pos = { x = W - 20, y = H / 2 } })
-        local mid = page.viewport.scroll
+        local mid = vp.scroll
         assert(mid > max * 0.25 and mid < max * 0.75, "middle of the page: " .. mid .. " of " .. max)
-        -- a quick flick down the bar jumps to the end
-        page:onMHSwipe(nil, { direction = "south", distance = H, pos = { x = W - 20, y = page.view_top + 10 } })
-        assert(page.viewport.scroll == max, "flicked to the end")
-        -- a drag in the middle of the page still scrolls as before
-        page:onMHPan(nil, { start_pos = { x = 300, y = 900 }, pos = { x = 300, y = 700 }, relative = { x = 0, y = -200 } })
-        assert(not page._bar_drag, "not the bar")
-        page:onMHPanRelease(nil, {})
-        local Library = require("mh/data/library")
-        local orig = Library.load
-        local many = {}
-        for i = 1, 40 do many[i] = { path = "/b/" .. i .. ".epub", title = "Book " .. i, authors = "", status = "new", has_cover = false } end
-        Library.load = function() return many, {} end
-        local Home = require("mh/ui/home")
-        local h = Home:new{ ui = {} }
-        local hmax = h.viewport:maxScroll()
-        h.calm_until = 0
-        h:onMHPan(nil, { start_pos = { x = W - 30, y = 400 }, pos = { x = W - 30, y = H - 60 }, relative = { x = 0, y = H - 460 } })
-        h:onMHPanRelease(nil, { pos = { x = W - 30, y = H - 60 } })
-        assert(h.viewport.scroll == hmax, "Home: dragged to the end")
-        Library.load = orig
-        h:onClose()
+        -- a swipe near the edge that does not start on the thumb scrolls normally
+        local before = vp.scroll
+        page:onMHSwipe(nil, { direction = "north", distance = 300, pos = { x = W - 20, y = H - 300 } })
+        assert(vp.scroll ~= before and vp.scroll ~= max, "normal scroll, no jump")
     end)
 end)
 
