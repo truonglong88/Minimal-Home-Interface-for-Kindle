@@ -5,6 +5,10 @@
 Changes made since the last push to GitHub. They get the plugin version of the
 next push.
 
+- Home: *Sync books* link next to ALL BOOKS reads the documents folder again
+  (books copied over SSH or USB while Home is open) and says how many are new;
+  the list stays where it was scrolled
+
 ## 0.1.44 – updates from the device, battery warnings
 
 **Updates over Wi-Fi**

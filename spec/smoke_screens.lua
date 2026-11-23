@@ -700,6 +700,41 @@ check("low battery: snackbar at 20 %, popup at 5 % that only OK closes", functio
     end)
 end)
 
+check("Sync books: reads the folder again and says how many are new", function()
+    withUI(function(run)
+        local Library = require("mh/data/library")
+        local orig = Library.load
+        local list = {
+            { path = "/b/a.epub", title = "A", authors = "X", status = "new", has_cover = false },
+            { path = "/b/b.epub", title = "B", authors = "Y", status = "new", has_cover = false },
+        }
+        Library.load = function()
+            local out = {}
+            for i, b in ipairs(list) do out[i] = b end
+            return out, {}
+        end
+        local Snackbar = require("mh/ui/snackbar")
+        local orig_show = Snackbar.show
+        local snacks = {}
+        Snackbar.show = function(t) snacks[#snacks + 1] = t end
+        local Home = require("mh/ui/home")
+        local h = Home:new{ ui = {} }
+        paint(h)
+        list[3] = { path = "/b/c.epub", title = "C", authors = "Z", status = "new", has_cover = false }
+        list[4] = { path = "/b/d.epub", title = "D", authors = "Z", status = "new", has_cover = false }
+        h:syncBooks()
+        assert(h.syncing, "Syncing… while it reads")
+        paint(h)
+        run()
+        assert(not h.syncing and #h.books == 4, "four books now")
+        assert(snacks[#snacks] == "2 new books", tostring(snacks[#snacks]))
+        h:syncBooks(); run()
+        assert(snacks[#snacks] == "No new books", tostring(snacks[#snacks]))
+        Library.load, Snackbar.show = orig, orig_show
+        h:onClose()
+    end)
+end)
+
 check("battery shows a bolt while charging", function()
     local Device = require("device")
     local p = Device:getPowerDevice()

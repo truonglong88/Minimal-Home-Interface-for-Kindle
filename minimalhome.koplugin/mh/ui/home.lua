@@ -436,11 +436,49 @@ function Home:allBooksHeader()
         function() self:showSortMenu() end)
     self.sort_button = sort
     sort.overlap_align = "right"
+    -- "Sync books": look in the documents folder again (books copied while Home is open)
+    local syncing = self.syncing
+    local link_col = syncing and self.col.muted or self.col.fg
+    local link_t = C.text(syncing and "Syncing…" or "Sync books", "sans_bold", 32, link_col)
+    local link = VerticalGroup:new{ align = "left", link_t }
+    if not syncing then
+        table.insert(link, C.space(1, px(4)))
+        table.insert(link, C.hline(link_t:getSize().w, px(3), link_col))
+    end
+    local pad = px(12)
+    local link_box = C.tappable(C.box(link:getSize().w + 2 * pad, h, link, { halign = "center", valign = "center" }),
+        function() UIManager:nextTick(function() self:syncBooks() end) end)
+    local left = HorizontalGroup:new{ align = "center",
+        C.box(label:getSize().w, h, label, { valign = "center" }), C.space(px(20) - pad, 1), link_box }
     return OverlapGroup:new{
         dimen = Geom:new{ w = w, h = h },
-        C.box(label:getSize().w, h, label, { valign = "center" }),
+        left,
         sort,
     }
+end
+
+--- Sync books: read the documents folder again and say how many books are new.
+--- The list stays where it was scrolled.
+function Home:syncBooks()
+    if self.syncing or self.closed then return end
+    self.syncing = true
+    self:rebuild() -- "Syncing…"
+    UIManager:forceRePaint()
+    UIManager:scheduleIn(0.05, function()
+        if self.closed then return end
+        local before = {}
+        for _, b in ipairs(self.books or {}) do before[b.path] = true end
+        self.syncing = false
+        self._keep_scroll = self.viewport and self.viewport.scroll or 0
+        self:reload()
+        local new = 0
+        for _, b in ipairs(self.books or {}) do
+            if not before[b.path] then new = new + 1 end
+        end
+        UIManager:setDirty(self, "ui")
+        require("mh/ui/snackbar").show(new == 0 and "No new books"
+            or (new == 1 and "1 new book" or (new .. " new books")))
+    end)
 end
 
 -- Screen assembly -----------------------------------------------------------------
