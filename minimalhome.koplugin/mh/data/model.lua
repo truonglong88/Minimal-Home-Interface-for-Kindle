@@ -171,6 +171,8 @@ local function firstAuthor(b)
 end
 
 Model.SORTS = {
+    { id = "folders", label = "Folders",        dirs = { "A → Z", "Z → A" },
+      sub = "Folders first, then single books" },
     { id = "recent", label = "Recently opened", dirs = { "Newest first", "Oldest first" } },
     { id = "added",  label = "Recently added",  dirs = { "Newest first", "Oldest first" } },
     { id = "title",  label = "Title",           dirs = { "A → Z", "Z → A" } },
@@ -213,10 +215,97 @@ function Model.sortBooks(books, key, asc)
     return list
 end
 
+-- Folders ------------------------------------------------------------------
+
+--- Sort key that puts numbers in number order: "Tập 2" before "Tập 10".
+function Model.naturalKey(s)
+    return (Model.sortKey(s):gsub("%d+", function(d) return string.format("%012d", tonumber(d) or 0) end))
+end
+
+local function byNatural(field)
+    return function(a, b)
+        local ka, kb = Model.naturalKey(a[field] or ""), Model.naturalKey(b[field] or "")
+        if ka == kb then return (a.path or "") < (b.path or "") end
+        return ka < kb
+    end
+end
+
+--- Books inside a folder: being read first (last opened on top), then not read
+--- yet (A → Z, numbers in order), then finished (same order).
+function Model.folderOrder(books)
+    local reading, unread, done = {}, {}, {}
+    for _, b in ipairs(books) do
+        if Model.isFinished(b) then done[#done + 1] = b
+        elseif Model.isInProgress(b) then reading[#reading + 1] = b
+        else unread[#unread + 1] = b end
+    end
+    table.sort(reading, function(a, b) return (a.last_opened or 0) > (b.last_opened or 0) end)
+    table.sort(unread, byNatural("title"))
+    table.sort(done, byNatural("title"))
+    local out = {}
+    for _, list in ipairs({ reading, unread, done }) do
+        for _, b in ipairs(list) do out[#out + 1] = b end
+    end
+    return out
+end
+
+--- Split `books` under `root`: the folders directly inside it (each with every
+--- book below it) and the books that sit in `root` itself.
+--- Folders come A → Z (numbers in order); `asc == false` reverses them.
+function Model.groupByFolder(books, root, asc)
+    root = (root or ""):gsub("/+$", "")
+    local folders, by_name, loose = {}, {}, {}
+    for _, b in ipairs(books) do
+        local path = b.path or ""
+        local rel = (root ~= "" and path:sub(1, #root + 1) == root .. "/") and path:sub(#root + 2) or nil
+        local first = rel and rel:match("^([^/]+)/")
+        if first then
+            local f = by_name[first]
+            if not f then
+                f = { name = first, path = root .. "/" .. first, books = {} }
+                by_name[first] = f
+                folders[#folders + 1] = f
+            end
+            f.books[#f.books + 1] = b
+        else
+            loose[#loose + 1] = b
+        end
+    end
+    table.sort(folders, byNatural("name"))
+    table.sort(loose, byNatural("title"))
+    if asc == false then
+        local function rev(t) local n = #t for i = 1, math.floor(n / 2) do t[i], t[n - i + 1] = t[n - i + 1], t[i] end end
+        rev(folders); rev(loose)
+    end
+    for _, f in ipairs(folders) do
+        f.ordered = Model.folderOrder(f.books)
+        f.top = f.ordered[1]
+    end
+    return folders, loose
+end
+
+--- "vol. 3" from a title or file name ending in a number, else the title.
+function Model.volumeLabel(b)
+    local title = b.title or ""
+    local n = title:match("(%d+)%D*$") or (b.path or ""):match("(%d+)[^/%d]*$")
+    return n and ("vol. " .. tonumber(n)) or title
+end
+
+--- Lines for a folder: "12 volumes" and, while one is being read, "Reading vol. 3".
+function Model.folderSummary(f)
+    local n = #f.books
+    local count = n == 1 and "1 volume" or (n .. " volumes")
+    local reading
+    for _, b in ipairs(f.ordered or Model.folderOrder(f.books)) do
+        if Model.isInProgress(b) then reading = b break end
+    end
+    return count, reading
+end
+
 function Model.sortLabel(key, asc)
     for _, s in ipairs(Model.SORTS) do
         if s.id == key then
-            local show_dir = key == "title" or key == "author" or asc == false
+            local show_dir = key == "title" or key == "author" or key == "folders" or asc == false
             return s.label .. (show_dir and (" · " .. s.dirs[asc == false and 2 or 1]) or "")
         end
     end

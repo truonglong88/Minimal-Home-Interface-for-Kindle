@@ -60,6 +60,9 @@ function SortMenu:init()
             table.insert(text, C.space(1, px(4)))
             table.insert(text, C.text(s.dirs[self.sort_asc == false and 2 or 1] .. " · tap again to reverse",
                 "sans_medium", 28, self.col.muted))
+        elseif s.sub then
+            table.insert(text, C.space(1, px(4)))
+            table.insert(text, C.text(s.sub, "sans_medium", 28, self.col.muted))
         end
         local row = OverlapGroup:new{
             dimen = Geom:new{ w = inner_w - 2 * px(36), h = px(120) },

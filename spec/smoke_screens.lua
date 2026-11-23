@@ -877,6 +877,59 @@ check("comic mode: found by sampling, full screen, Auto / On / Off", function()
     assert(#ev8 == 0 and pdf.view.footer.mode == 1, "PDF untouched")
 end)
 
+check("Folders view: folder rows, order inside a folder, folder page", function()
+    local Model = require("mh/data/model")
+    local root = "/mnt/us/documents"
+    local function bk(p, title, status, pct, opened)
+        return { path = root .. "/" .. p, title = title, authors = "", status = status, percent = pct,
+            last_opened = opened, has_cover = false }
+    end
+    local books = {
+        bk("Ninja loan thi/Ninja 10.cbz", "Ninja 10", "new"),
+        bk("Ninja loan thi/Ninja 2.cbz", "Ninja 2", "complete", 1, 100),
+        bk("Ninja loan thi/Ninja 3.cbz", "Ninja 3", "reading", 0.45, 300),
+        bk("Ninja loan thi/Ninja 4.cbz", "Ninja 4", "reading", 0.1, 200),
+        bk("Ninja loan thi/Ninja 1.cbz", "Ninja 1", "complete", 1, 50),
+        bk("Ninja loan thi/Ninja 5.cbz", "Ninja 5", "new"),
+        bk("Bac si quai di/Tap 1.cbz", "Bác sĩ 1", "new"),
+        bk("Hirayasumi.cbz", "Hirayasumi", "reading", 0.12, 400),
+    }
+    local folders, loose = Model.groupByFolder(books, root)
+    assert(#folders == 2 and folders[1].name == "Bac si quai di" and folders[2].name == "Ninja loan thi", "folders A → Z")
+    assert(#loose == 1 and loose[1].title == "Hirayasumi", "single books after")
+    local order = {}
+    for i, b in ipairs(folders[2].ordered) do order[i] = b.title end
+    assert(table.concat(order, ",") == "Ninja 3,Ninja 4,Ninja 5,Ninja 10,Ninja 1,Ninja 2",
+        "reading (last opened first), unread (2 before 10), finished: " .. table.concat(order, ","))
+    assert(folders[2].top.title == "Ninja 3", "folder cover = the top book")
+    local count, reading = Model.folderSummary(folders[2])
+    assert(count == "6 volumes" and reading.title == "Ninja 3" and Model.volumeLabel(reading) == "vol. 3", "summary")
+
+    withUI(function(run, shown)
+        local Library = require("mh/data/library")
+        local orig = Library.load
+        Library.load = function() return books, {} end
+        local Prefs = require("mh/data/prefs")
+        Prefs.set("books_folder", root)
+        Prefs.set("sort_key", "folders")
+        local Home = require("mh/ui/home")
+        local h = Home:new{ ui = {} }
+        assert(h.entries and h.entries[1].folder and h.entries[3].book, "entries: 2 folders then 1 book")
+        h.viewport:scrollTo(h.list_header_y or 0)
+        paint(h)
+        h:openFolder(folders[2])
+        local page = shown[#shown]
+        assert(page and page.title == "Ninja loan thi", "folder page opened")
+        assert(page.subtitle == "6 volumes · 2 finished · reading vol. 3", page.subtitle)
+        paint(page)
+        page:close()
+        Library.load = orig
+        Prefs.set("sort_key", "recent")
+        Prefs.set("books_folder", nil)
+        h:onClose()
+    end)
+end)
+
 check("battery shows a bolt while charging", function()
     local Device = require("device")
     local p = Device:getPowerDevice()

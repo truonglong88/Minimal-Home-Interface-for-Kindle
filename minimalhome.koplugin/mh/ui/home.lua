@@ -93,6 +93,16 @@ function Home:resort()
     self.sort_key = Prefs.get("sort_key")
     self.sort_asc = Prefs.get("sort_asc")
     self.sorted = Model.sortBooks(self.books, self.sort_key, self.sort_asc)
+    self.entries = nil
+    if self.sort_key == "folders" then
+        -- folders first (one row each), then the books on their own
+        local root = Prefs.booksFolder()
+        pcall(function() root = require("ffi/util").realpath(root) or root end)
+        local folders, loose = Model.groupByFolder(self.books, root, self.sort_asc)
+        self.entries = {}
+        for _, f in ipairs(folders) do self.entries[#self.entries + 1] = { folder = f } end
+        for _, b in ipairs(loose) do self.entries[#self.entries + 1] = { book = b } end
+    end
     self.blocks = nil
 end
 
@@ -403,6 +413,64 @@ function Home:bookRow(b, index)
 end
 
 --- Hold a book in All books: delete it from the Kindle, after asking.
+--- A folder in the Folders view (design: "All books – Folders view"): a small pile
+--- of covers with the top book's cover in front, the name, how many books and,
+--- while one is being read, which one and how far.
+function Home:folderRow(f, index)
+    local w = self:contentWidth()
+    local cover_w, cover_h = px(148), px(216)
+    local step = px(12)
+    local pile_w, pile_h = cover_w + 2 * step, cover_h + 2 * step
+    local gap = px(40)
+    local chev_w = px(40)
+    local col_w = w - pile_w - gap - chev_w - px(16)
+
+    local back1 = C.Rect:new{ w = cover_w, h = cover_h, color = self.col.line, radius = px(8) }
+    back1.overlap_offset = { 2 * step, 0 }
+    local back2 = C.box(cover_w, cover_h, C.space(1, 1), { bg = self.col.bg, border = px(2), border_color = self.col.line,
+        radius = px(8) })
+    back2.overlap_offset = { step, step }
+    local front = f.top and self:coverFor(f.top, cover_w, cover_h,
+        { compact = true, title_size = 23, border = px(2), radius = px(8), style_index = index })
+        or C.box(cover_w, cover_h, C.space(1, 1), { border = px(2), border_color = self.col.line, radius = px(8) })
+    front.overlap_offset = { 0, 2 * step }
+    local pile = OverlapGroup:new{ dimen = Geom:new{ w = pile_w, h = pile_h }, allow_mirroring = false,
+        back1, back2, front }
+
+    local count, reading = Model.folderSummary(f)
+    local texts = VerticalGroup:new{ align = "left",
+        C.text(f.name, "serif_bold", 44, self.col.fg, col_w), C.space(1, px(10)) }
+    local meta = count
+    if reading then meta = count .. " · Reading " .. Model.volumeLabel(reading) end
+    table.insert(texts, C.text(meta, "sans_medium", 32, self.col.muted, col_w))
+    if reading and reading.percent then
+        table.insert(texts, C.space(1, px(18)))
+        table.insert(texts, HorizontalGroup:new{
+            align = "center",
+            C.progress(px(300), px(12), reading.percent, Home.TRACK, self.col.fg, px(6)),
+            C.space(px(20), 1),
+            C.text(Model.percentInt(reading) .. "%", "sans_bold", 30, self.col.muted),
+        })
+    end
+    local content = HorizontalGroup:new{
+        align = "center",
+        pile, C.space(gap, 1),
+        C.box(col_w, pile_h, texts, { valign = "center" }),
+        C.space(px(16), 1),
+        C.text("›", "sans_bold", 48, self.col.muted),
+    }
+    return VerticalGroup:new{
+        align = "left",
+        C.hline(w, px(Home.LINE), self.col.line),
+        C.tappable(C.box(w, px(Home.ROW_H), content, { valign = "center" }),
+            function() UIManager:nextTick(function() self:openFolder(f) end) end),
+    }
+end
+
+function Home:openFolder(f)
+    require("mh/ui/folderpage"):new{ ui = self.ui, home = self, folder = f }:show()
+end
+
 function Home:confirmDelete(b)
     require("mh/ui/confirm").show{
         title = "Delete this book?",
@@ -591,8 +659,18 @@ function Home:buildColumn()
         self.list_header_y = y + px(space)
         add(function() return self:listHeaderBlock(space) end)
         local row_h = px(Home.ROW_H) + px(Home.LINE)
-        for i = 1, #self.sorted do
-            add(function() return self:bookRow(self.sorted[i], i) end, row_h)
+        if self.entries then
+            for i, e in ipairs(self.entries) do
+                if e.folder then
+                    add(function() return self:folderRow(e.folder, i) end, row_h)
+                else
+                    add(function() return self:bookRow(e.book, i) end, row_h)
+                end
+            end
+        else
+            for i = 1, #self.sorted do
+                add(function() return self:bookRow(self.sorted[i], i) end, row_h)
+            end
         end
         add(function() return C.hline(self:contentWidth(), px(Home.LINE), self.col.line) end, px(Home.LINE))
     end

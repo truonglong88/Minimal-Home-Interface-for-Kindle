@@ -21,6 +21,10 @@ next push.
 - Charging: the battery icon is shown empty with a big lightning bolt lying on
   its side, filling it wall to wall
 - Settings › Device: *Storage* row, "2.3 GB free of 4 GB" with a used / free bar
+- All books › Folders: each folder becomes one row (a pile of covers, the top
+  book's cover in front, how many books, and the one being read with its %);
+  tapping it opens the folder: books being read first (last opened on top),
+  then not read yet (A → Z, 2 before 10), then finished
 - Home: *Sync books* link next to ALL BOOKS reads the documents folder again
   (books copied over SSH or USB while Home is open) and says how many are new;
   the list stays where it was scrolled
