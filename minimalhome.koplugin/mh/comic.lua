@@ -137,9 +137,9 @@ Comic.SCAN_PAUSE = 0.05
 
 --- True when page p holds neither a picture nor a word (from its HTML).
 function Comic.pageIsBlank(doc, p, total)
-    if p >= total or not doc.getHTMLFromXPointers then return false end
-    local a, b = doc:getPageXPointer(p), doc:getPageXPointer(p + 1)
-    if not a or not b then return false end
+    if p >= total or not doc.getHTMLFromXPointers or not doc._document then return false end
+    local okx, a, b = pcall(function() return doc:getPageXPointer(p), doc:getPageXPointer(p + 1) end)
+    if not okx or not a or not b then return false end
     local ok, html = pcall(doc.getHTMLFromXPointers, doc, a, b)
     if not ok or type(html) ~= "string" then return false end
     if html:find("<img", 1, true) or html:find("<image", 1, true) or html:find("<svg", 1, true) then return false end
@@ -156,7 +156,8 @@ function Comic.stop(ui)
 end
 
 local function alive(ui)
-    return ui and not ui._minimalhome_closed and ui.document and ui.document._document ~= nil
+    -- a closed book keeps its document object, with _document set to false
+    return ui and not ui._minimalhome_closed and ui.document and ui.document._document and true or false
 end
 
 function Comic.scan(ui)
@@ -174,6 +175,7 @@ function Comic.scan(ui)
         if ui._minimalhome_scan ~= job or not ui._minimalhome_comic or not alive(ui) then return end
         local stop = math.min(total - 1, p + Comic.SCAN_STEP - 1)
         for q = p, stop do
+            if not alive(ui) then return end
             if Comic.pageIsBlank(doc, q, total) then ui._minimalhome_blank[q] = true end
         end
         p = stop + 1

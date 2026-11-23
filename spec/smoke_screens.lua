@@ -840,6 +840,23 @@ check("comic mode: found by sampling, full screen, Auto / On / Off", function()
     ui5._minimalhome_blank, ui5._minimalhome_blank_total = { [4] = true }, 10
     ui5.view:onPageUpdate(3)
     assert(ui5.view:onPageUpdate(4) == true and sent5[1] and sent5[1].args[1] == 1, "page 4 skipped before drawing")
+    -- a book closed while the scan runs (KOReader sets _document to false): no more calls
+    local calls = 0
+    local doc6 = { _document = {}, getPageCount = function() return 100 end,
+        getPageXPointer = function(_, p) calls = calls + 1; return p end,
+        getHTMLFromXPointers = function() return "<img/>" end }
+    local ui6 = { _minimalhome_comic = true, document = doc6 }
+    local orig_in = UIManager.scheduleIn
+    local queued = {}
+    UIManager.scheduleIn = function(_, _, f) queued[#queued + 1] = f end
+    Comic.scan(ui6)
+    table.remove(queued, 1)() -- first step runs while open
+    local before = calls
+    doc6._document = false   -- KOReader closed the book
+    while #queued > 0 do table.remove(queued, 1)() end
+    UIManager.scheduleIn = orig_in
+    assert(before > 0 and calls == before, "no calls on a closed book: " .. calls .. " vs " .. before)
+    assert(not Comic.pageIsBlank(doc6, 5, 100), "closed book: nothing read")
 end)
 
 check("battery shows a bolt while charging", function()
