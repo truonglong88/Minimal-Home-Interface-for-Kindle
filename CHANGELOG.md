@@ -27,6 +27,8 @@ next push.
   then not read yet (A → Z, 2 before 10), then finished
 - Folders view starts inside a lone wrapper folder (the Kindle's "documents", or
   a folder that only holds other folders), so the series show at once
+- ‹ Back in a book opened from a folder returns to that folder (and the folders
+  above it); swiping up still goes straight Home
 - Scrollbars can be dragged (Home, Settings, Contents, folders…): put a finger
   on the right edge and the list follows it; a quick flick along the bar jumps
 - Home: *Sync books* link next to ALL BOOKS reads the documents folder again

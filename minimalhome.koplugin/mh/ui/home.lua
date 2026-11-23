@@ -68,6 +68,13 @@ function Home:init()
     end
     self:reload()
     self:scheduleClock()
+    -- ‹ Back from a book opened in a folder: that folder again
+    if Home.back_pressed and Home.return_folders then
+        local paths = Home.return_folders
+        Home.back_pressed, Home.return_folders = nil, nil
+        UIManager:nextTick(function() self:reopenFolders(paths) end)
+    end
+    Home.back_pressed = nil
     -- a new build on GitHub? At most once an hour, only when Wi-Fi is already on
     require("mh/updater").checkSoon(require("mh/updater").HOME_EVERY,
         function(_, _, changed) if changed then self:rebuild() end end)
@@ -466,6 +473,20 @@ function Home:folderRow(f, index)
         C.tappable(C.box(w, px(Home.ROW_H), content, { valign = "center" }),
             function() UIManager:nextTick(function() self:openFolder(f) end) end),
     }
+end
+
+--- Open the folder pages for these paths again (outermost first).
+function Home:reopenFolders(paths)
+    if self.closed then return end
+    for _, path in ipairs(paths) do
+        local f = { name = path:match("([^/]+)$") or path, path = path, books = {} }
+        local prefix = path .. "/"
+        for _, b in ipairs(self.books or {}) do
+            if (b.path or ""):sub(1, #prefix) == prefix then f.books[#f.books + 1] = b end
+        end
+        if #f.books == 0 then return end -- moved or deleted meanwhile: stay on Home
+        self:openFolder(f)
+    end
 end
 
 function Home:openFolder(f)
@@ -982,7 +1003,15 @@ function Home.showKindleOnly()
         "KOReader can’t read this Kindle Store format.")
 end
 
-function Home:openBook(path)
+-- Back from a book opened in a folder returns to that folder (and the folders
+-- above it). `Home.return_folders` lists their paths, outermost first;
+-- `Home.back_pressed` is set by the reading menu's ‹ Back (swiping up goes Home).
+Home.return_folders = nil
+Home.back_pressed = nil
+
+function Home:openBook(path, from_folders)
+    Home.return_folders = from_folders
+    Home.back_pressed = nil
     if self:isKindleOnly(path) then Home.showKindleOnly() return end
     if self.opening then return end
     self.opening = true

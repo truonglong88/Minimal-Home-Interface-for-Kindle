@@ -109,7 +109,12 @@ function ReaderMenu:build()
     local title = props.display_title or props.title or ""
 
     local back = C.tappable(C.box(px(240), px(104), C.text("‹  Back", "sans_bold", 34, col.fg), { valign = "center" }),
-        function() self:close() self.ui:handleEvent(Event:new("Home")) end)
+        function()
+            self:close()
+            -- ‹ Back: to where the book was opened from (a folder, or Home)
+            require("mh/ui/home").back_pressed = true
+            self.ui:handleEvent(Event:new("Home"))
+        end)
 
     local bookmarked = false
     if self.ui.bookmark and self.ui.bookmark.isPageBookmarked then

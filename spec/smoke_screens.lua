@@ -935,7 +935,31 @@ check("Folders view: folder rows, order inside a folder, folder page", function(
         assert(page and page.title == "Ninja loan thi", "folder page opened")
         assert(page.subtitle == "6 volumes · 2 finished · reading vol. 3", page.subtitle)
         paint(page)
-        page:close()
+        -- open a book from the folder: Home remembers the way back
+        local opened
+        local orig_open = h.openBook
+        h.openBook = function(_, path, trail) opened = { path = path, trail = trail } end
+        page:openBook(page.books[1].path)
+        h.openBook = orig_open
+        assert(opened and opened.trail and opened.trail[1] == root .. "/Ninja loan thi", "folder trail kept")
+        assert(page.closed, "folder page closed for the book")
+        -- ‹ Back in the book: the new Home opens that folder again
+        Home.return_folders, Home.back_pressed = opened.trail, true
+        local n0 = #shown
+        local h2 = Home:new{ ui = {} }
+        run()
+        local reopened = shown[#shown]
+        assert(#shown > n0 and reopened.folder and reopened.folder.path == root .. "/Ninja loan thi", "back to the folder")
+        assert(Home.back_pressed == nil and Home.return_folders == nil, "used once")
+        reopened:close()
+        h2:onClose()
+        -- swiping up for Home (no ‹ Back): plain Home
+        Home.return_folders, Home.back_pressed = opened.trail, nil
+        local n1 = #shown
+        local h3 = Home:new{ ui = {} }
+        run()
+        assert(#shown == n1, "swipe Home stays on Home")
+        h3:onClose()
         Library.load = orig
         Prefs.set("sort_key", "recent")
         Prefs.set("books_folder", nil)

@@ -77,6 +77,13 @@ end
 --- Close this page (and any folder pages under it), then open the book from Home.
 function FolderPage:openBook(path)
     local home = self.home
+    -- the folders on the way here, outermost first: ‹ Back in the book returns to them
+    local trail = {}
+    for _, win in ipairs(UIManager._window_stack or {}) do
+        local w = win.widget
+        if w and w.folder and w.is_mh_page and not w.closed then trail[#trail + 1] = w.folder.path end
+    end
+    if #trail == 0 or trail[#trail] ~= self.folder.path then trail[#trail + 1] = self.folder.path end
     for _, win in ipairs(UIManager._window_stack or {}) do
         local w = win.widget
         if w and w ~= self and w.folder and w.is_mh_page and not w.closed then
@@ -86,7 +93,7 @@ function FolderPage:openBook(path)
     end
     self.on_close = nil
     self:close()
-    if home and not home.closed then home:openBook(path) end
+    if home and not home.closed then home:openBook(path, trail) end
 end
 
 function FolderPage:confirmDelete(b)
