@@ -13,6 +13,9 @@ next push.
   pages are passed over in the direction you are reading: found ahead of time
   in the background (from each page's content, no drawing), so the reader goes
   straight to the next picture without showing the blank page
+- Comic mode for CBZ / CBR: one picture per screen (page mode, never scrolled
+  half into the next picture), the whole page fitted, no status line; KOReader
+  draws the next page ahead, so page turns are quick
 - Fix: crash when leaving a comic while its blank pages were still being looked
   for (the check went on reading the closed book)
 - Settings › Device: *Storage* row, "2.3 GB free of 4 GB" with a used / free bar

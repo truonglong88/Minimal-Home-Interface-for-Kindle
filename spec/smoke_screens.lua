@@ -857,6 +857,24 @@ check("comic mode: found by sampling, full screen, Auto / On / Off", function()
     UIManager.scheduleIn = orig_in
     assert(before > 0 and calls == before, "no calls on a closed book: " .. calls .. " vs " .. before)
     assert(not Comic.pageIsBlank(doc6, 5, 100), "closed book: nothing read")
+    -- CBZ: page mode (never scrolled into the next picture), whole page, no status line
+    local function pagingUI(file)
+        local store, ev = {}, {}
+        return { paging = true, document = { file = file },
+            doc_settings = { readSetting = function(_, k) return store[k] end, saveSetting = function(_, k, v) store[k] = v end },
+            view = { footer = { mode = 1, mode_list = { off = 0 }, applyFooterMode = function(f, m) f.mode = m end } },
+            handleEvent = function(_, e) ev[#ev + 1] = e end }, ev
+    end
+    local cbz, ev7 = pagingUI("/mnt/us/documents/Hirayasumi.cbz")
+    Comic.prepare(cbz)
+    assert(cbz.view.footer.mode == 0, "CBZ: status line hidden from the start")
+    Comic.onReady(cbz)
+    local got = {}
+    for _, e in ipairs(ev7) do got[e.handler] = e.args[1] end
+    assert(got.onSetScrollMode == false and got.onSetZoomMode == "page", "CBZ: page mode, whole page")
+    local pdf, ev8 = pagingUI("/mnt/us/documents/manual.pdf")
+    Comic.prepare(pdf); Comic.onReady(pdf)
+    assert(#ev8 == 0 and pdf.view.footer.mode == 1, "PDF untouched")
 end)
 
 check("battery shows a bolt while charging", function()

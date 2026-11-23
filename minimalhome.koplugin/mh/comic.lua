@@ -49,11 +49,39 @@ function Comic.autoResult(ui)
     return ds:readSetting("minimalhome_comic_auto")
 end
 
+--- CBZ / CBR / CBT / CB7: comic book archives, comics by definition.
+function Comic.isComicArchive(ui)
+    local file = ui and ui.document and ui.document.file or ""
+    local ext = file:lower():match("%.([%w]+)$")
+    return ext == "cbz" or ext == "cbr" or ext == "cbt" or ext == "cb7"
+end
+
 function Comic.isOn(ui)
     local m = Comic.mode(ui)
     if m == "on" then return true end
     if m == "off" then return false end
+    if ui and ui.paging then return Comic.isComicArchive(ui) end
     return Comic.autoResult(ui) == true
+end
+
+--- Page-based comics (CBZ…): one picture per screen, never scrolled half-way into
+--- the next one. Page mode (not continuous), the whole page fitted to the screen,
+--- no status line. KOReader then draws the next page ahead while you read.
+function Comic.applyPaging(ui, on)
+    if ui._minimalhome_comic == on then return end
+    ui._minimalhome_comic = on
+    local ok, err = pcall(function()
+        local footer = ui.view and ui.view.footer
+        if footer and footer.applyFooterMode and footer.mode_list then
+            footer:applyFooterMode(on and footer.mode_list.off
+                or (G_reader_settings:readSetting("reader_footer_mode") or 1))
+        end
+        if on then
+            ui:handleEvent(Event:new("SetScrollMode", false))
+            ui:handleEvent(Event:new("SetZoomMode", "page"))
+        end
+    end)
+    if not ok then logger.warn("MinimalHome: comic mode (pages):", err) end
 end
 
 --- Count the words on page p.
@@ -301,6 +329,19 @@ end
 --- a book already known to be a comic gets its CSS and a hidden status line in
 --- the same layout pass as everything else, so it opens no slower than before.
 function Comic.prepare(ui)
+    if ui and ui.paging and settings(ui) then
+        -- comic archives: no status line from the start
+        if Comic.isOn(ui) then
+            ui._minimalhome_comic = true
+            pcall(function()
+                local footer = ui.view and ui.view.footer
+                if footer and footer.applyFooterMode and footer.mode_list then
+                    footer:applyFooterMode(footer.mode_list.off)
+                end
+            end)
+        end
+        return
+    end
     if not ui or not ui.rolling or not settings(ui) then return end
     pcall(hookCss, ui)
     pcall(hookBlankPages, ui)
@@ -317,6 +358,13 @@ end
 
 --- A book has opened: decide (once) and show it the right way.
 function Comic.onReady(ui)
+    if ui and ui.paging and settings(ui) then
+        if Comic.isOn(ui) then
+            ui._minimalhome_comic = nil -- (prepare only hid the status line)
+            Comic.applyPaging(ui, true)
+        end
+        return
+    end
     if not ui or not ui.rolling or not settings(ui) then return end
     if Comic.mode(ui) == "auto" and Comic.autoResult(ui) == nil then
         local ok, res = pcall(Comic.detect, ui)
