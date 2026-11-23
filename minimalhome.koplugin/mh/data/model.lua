@@ -284,6 +284,21 @@ function Model.groupByFolder(books, root, asc)
     return folders, loose
 end
 
+--- Where the Folders view starts: from `root`, step into a lone wrapper folder
+--- (like "documents" under the Kindle's home, or a "Comics" folder holding every
+--- series) as long as nothing else sits beside it and it holds folders itself.
+function Model.foldersRoot(books, root)
+    root = (root or ""):gsub("/+$", "")
+    for _ = 1, 8 do
+        local folders, loose = Model.groupByFolder(books, root)
+        if #folders ~= 1 or #loose > 0 then break end
+        local sub = Model.groupByFolder(folders[1].books, folders[1].path)
+        if #sub == 0 then break end -- a single series: keep it as one folder row
+        root = folders[1].path
+    end
+    return root
+end
+
 --- "vol. 3" from a title or file name ending in a number, else the title.
 function Model.volumeLabel(b)
     local title = b.title or ""

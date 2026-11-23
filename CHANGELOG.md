@@ -25,6 +25,8 @@ next push.
   book's cover in front, how many books, and the one being read with its %);
   tapping it opens the folder: books being read first (last opened on top),
   then not read yet (A → Z, 2 before 10), then finished
+- Folders view starts inside a lone wrapper folder (the Kindle's "documents", or
+  a folder that only holds other folders), so the series show at once
 - Home: *Sync books* link next to ALL BOOKS reads the documents folder again
   (books copied over SSH or USB while Home is open) and says how many are new;
   the list stays where it was scrolled

@@ -904,6 +904,19 @@ check("Folders view: folder rows, order inside a folder, folder page", function(
     assert(folders[2].top.title == "Ninja 3", "folder cover = the top book")
     local count, reading = Model.folderSummary(folders[2])
     assert(count == "6 volumes" and reading.title == "Ninja 3" and Model.volumeLabel(reading) == "vol. 3", "summary")
+    -- KOReader's home is /mnt/us and every book is in documents/: start inside it
+    assert(Model.foldersRoot(books, "/mnt/us") == root, "steps into documents: " .. Model.foldersRoot(books, "/mnt/us"))
+    -- every series inside one Comics folder: step into it too
+    local comics = {}
+    for i, b in ipairs(books) do
+        if b.path:find("/Ninja") or b.path:find("/Bac si") then
+            comics[#comics + 1] = { path = b.path:gsub("/documents/", "/documents/Comics/"), title = b.title }
+        end
+    end
+    assert(Model.foldersRoot(comics, "/mnt/us") == root .. "/Comics", Model.foldersRoot(comics, "/mnt/us"))
+    -- a single series stays a folder row
+    local one = { { path = root .. "/Ninja loan thi/a.cbz", title = "a" }, { path = root .. "/Ninja loan thi/b.cbz", title = "b" } }
+    assert(Model.foldersRoot(one, "/mnt/us") == root, Model.foldersRoot(one, "/mnt/us"))
 
     withUI(function(run, shown)
         local Library = require("mh/data/library")

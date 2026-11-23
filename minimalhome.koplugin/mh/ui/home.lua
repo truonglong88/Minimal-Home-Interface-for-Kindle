@@ -98,6 +98,7 @@ function Home:resort()
         -- folders first (one row each), then the books on their own
         local root = Prefs.booksFolder()
         pcall(function() root = require("ffi/util").realpath(root) or root end)
+        root = Model.foldersRoot(self.books, root)
         local folders, loose = Model.groupByFolder(self.books, root, self.sort_asc)
         self.entries = {}
         for _, f in ipairs(folders) do self.entries[#self.entries + 1] = { folder = f } end
