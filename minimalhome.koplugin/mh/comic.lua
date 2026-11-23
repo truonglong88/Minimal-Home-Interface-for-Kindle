@@ -128,6 +128,54 @@ function Comic.isBlank(bb, x, y, w, h)
     return true
 end
 
+-- Blank pages found ahead of time: right after the book opens, every page's HTML
+-- is looked at in the background, a few pages per step. A page with no picture
+-- and no words is blank, and a page turn that would land on it goes straight on,
+-- before anything is drawn. (The screen check above stays as a last resort.)
+Comic.SCAN_STEP = 20 -- pages per step
+Comic.SCAN_PAUSE = 0.05
+
+--- True when page p holds neither a picture nor a word (from its HTML).
+function Comic.pageIsBlank(doc, p, total)
+    if p >= total or not doc.getHTMLFromXPointers then return false end
+    local a, b = doc:getPageXPointer(p), doc:getPageXPointer(p + 1)
+    if not a or not b then return false end
+    local ok, html = pcall(doc.getHTMLFromXPointers, doc, a, b)
+    if not ok or type(html) ~= "string" then return false end
+    if html:find("<img", 1, true) or html:find("<image", 1, true) or html:find("<svg", 1, true) then return false end
+    local text = html:gsub("<[^>]*>", " "):gsub("&[%w#]+;", " ")
+    return not text:find("[%w\128-\255]")
+end
+
+function Comic.scan(ui)
+    local doc = ui.document
+    if not (ui._minimalhome_comic and doc and doc.getPageCount) then return end
+    local ok, total = pcall(doc.getPageCount, doc)
+    if not ok or not total then return end
+    local job = {}
+    ui._minimalhome_scan = job
+    ui._minimalhome_blank = {}
+    ui._minimalhome_blank_total = total
+    local p = 1
+    local UIManager = require("ui/uimanager")
+    local function step()
+        if ui._minimalhome_scan ~= job or not ui._minimalhome_comic then return end
+        local stop = math.min(total - 1, p + Comic.SCAN_STEP - 1)
+        for q = p, stop do
+            if Comic.pageIsBlank(doc, q, total) then ui._minimalhome_blank[q] = true end
+        end
+        p = stop + 1
+        if p < total then
+            UIManager:scheduleIn(Comic.SCAN_PAUSE, step)
+        else
+            local n = 0
+            for _ in pairs(ui._minimalhome_blank) do n = n + 1 end
+            logger.info("MinimalHome: comic blank pages:", n, "of", total)
+        end
+    end
+    UIManager:scheduleIn(0.5, step)
+end
+
 local function hookBlankPages(ui)
     local view = ui.view
     if not view or view._minimalhome_blank_hook then return end
@@ -163,6 +211,23 @@ local function hookBlankPages(ui)
             ui._minimalhome_dir = new_page > last and 1 or -1
         end
         last = new_page
+        if ui._minimalhome_comic and new_page and ui._minimalhome_blank then
+            local total = ui.document:getPageCount()
+            if total ~= ui._minimalhome_blank_total then
+                Comic.scan(ui) -- layout changed: page numbers moved
+            elseif ui._minimalhome_blank[new_page] then
+                local dir = ui._minimalhome_dir or 1
+                local nxt = new_page + dir
+                if nxt >= 1 and nxt <= total and (ui._minimalhome_skips or 0) < Comic.MAX_SKIPS then
+                    ui._minimalhome_skips = (ui._minimalhome_skips or 0) + 1
+                    -- straight on, before the blank page is drawn
+                    ui:handleEvent(Event:new("GotoViewRel", dir))
+                    return true
+                end
+            else
+                ui._minimalhome_skips = 0
+            end
+        end
         if orig_update then return orig_update(self, new_page, ...) end
     end
 end
@@ -238,7 +303,10 @@ function Comic.onReady(ui)
     end
     local on = Comic.isOn(ui)
     -- a normal book needs nothing done: it is already styled
-    if on then Comic.apply(ui, true) end
+    if on then
+        Comic.apply(ui, true)
+        Comic.scan(ui)
+    end
 end
 
 --- Font panel: Auto / On / Off.
@@ -251,6 +319,7 @@ function Comic.setMode(ui, mode)
         ds:saveSetting("minimalhome_comic_auto", ok and res == true)
     end
     Comic.apply(ui, Comic.isOn(ui))
+    if Comic.isOn(ui) then Comic.scan(ui) end
 end
 
 --- The line above the Font panel's buttons.

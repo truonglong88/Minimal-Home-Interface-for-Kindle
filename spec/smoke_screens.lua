@@ -824,6 +824,22 @@ check("comic mode: found by sampling, full screen, Auto / On / Off", function()
     for _, f in ipairs(ticks) do f() end
     UIManager.nextTick = orig_tick
     assert(sent[1] and sent[1].handler == "onGotoViewRel" and sent[1].args[1] == 1, "blank page skipped forward")
+
+    -- known blank pages (found ahead from the HTML) are passed over before being drawn
+    local html = { [3] = '<div><img src="p3.jpg"/></div>', [4] = "<p> </p>", [5] = "<p>Chapter 2</p>" }
+    local doc = { getPageXPointer = function(_, p) return p end,
+        getHTMLFromXPointers = function(_, a) return html[a] or "<img/>" end,
+        getPageCount = function() return 10 end, getCurrentPage = function() return 4 end }
+    assert(not Comic.pageIsBlank(doc, 3, 10), "picture page")
+    assert(Comic.pageIsBlank(doc, 4, 10), "empty page")
+    assert(not Comic.pageIsBlank(doc, 5, 10), "words are not blank")
+    local sent5 = {}
+    local ui5 = { _minimalhome_comic = true, document = doc, view = { paintTo = function() end },
+        handleEvent = function(_, ev) sent5[#sent5 + 1] = ev end }
+    Comic.hookBlankPages(ui5)
+    ui5._minimalhome_blank, ui5._minimalhome_blank_total = { [4] = true }, 10
+    ui5.view:onPageUpdate(3)
+    assert(ui5.view:onPageUpdate(4) == true and sent5[1] and sent5[1].args[1] == 1, "page 4 skipped before drawing")
 end)
 
 check("battery shows a bolt while charging", function()

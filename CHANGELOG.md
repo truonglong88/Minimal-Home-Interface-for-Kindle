@@ -10,7 +10,9 @@ next push.
   page. Found by looking at 10 pages spread through the book (once per book);
   Font panel › COMIC MODE: Auto / On / Off
 - Comic mode: pictures grow to fill the page (keeping their shape), and blank
-  pages left behind a picture are passed over in the direction you are reading
+  pages are passed over in the direction you are reading: found ahead of time
+  in the background (from each page's content, no drawing), so the reader goes
+  straight to the next picture without showing the blank page
 - Settings › Device: *Storage* row, "2.3 GB free of 4 GB" with a used / free bar
 - Home: *Sync books* link next to ALL BOOKS reads the documents folder again
   (books copied over SSH or USB while Home is open) and says how many are new;
