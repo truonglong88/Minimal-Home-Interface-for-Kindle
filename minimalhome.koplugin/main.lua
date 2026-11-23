@@ -121,7 +121,16 @@ end
 -- The file browser or the book is going away.
 function MinimalHome:onCloseWidget()
     self:closeHome()
-    if not isFileManager(self.ui) then require("mh/reader").stopClock() end
+    if not isFileManager(self.ui) then
+        require("mh/reader").stopClock()
+        -- the book is closing: no more background work on it
+        pcall(function() require("mh/comic").stop(self.ui) end)
+    end
+end
+
+-- KOReader is about to close the document (before the widget goes): stop first.
+function MinimalHome:onCloseDocument()
+    if not isFileManager(self.ui) then pcall(function() require("mh/comic").stop(self.ui) end) end
 end
 
 -- Waking up: the reading screen's clock must show the new time at once.

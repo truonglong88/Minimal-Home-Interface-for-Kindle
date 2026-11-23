@@ -13,6 +13,8 @@ next push.
   pages are passed over in the direction you are reading: found ahead of time
   in the background (from each page's content, no drawing), so the reader goes
   straight to the next picture without showing the blank page
+- Fix: the comic background check could keep running after a book was closed
+  and touch the closed book (a possible crash when opening the next one)
 - Settings › Device: *Storage* row, "2.3 GB free of 4 GB" with a used / free bar
 - Home: *Sync books* link next to ALL BOOKS reads the documents folder again
   (books copied over SSH or USB while Home is open) and says how many are new;

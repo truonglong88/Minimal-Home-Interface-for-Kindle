@@ -147,9 +147,21 @@ function Comic.pageIsBlank(doc, p, total)
     return not text:find("[%w\128-\255]")
 end
 
+--- The book is closing: stop the background scan and the page checks.
+function Comic.stop(ui)
+    if not ui then return end
+    ui._minimalhome_closed = true
+    ui._minimalhome_scan = nil
+    ui._minimalhome_comic_skip = true
+end
+
+local function alive(ui)
+    return ui and not ui._minimalhome_closed and ui.document and ui.document._document ~= nil
+end
+
 function Comic.scan(ui)
     local doc = ui.document
-    if not (ui._minimalhome_comic and doc and doc.getPageCount) then return end
+    if not (ui._minimalhome_comic and alive(ui) and doc.getPageCount) then return end
     local ok, total = pcall(doc.getPageCount, doc)
     if not ok or not total then return end
     local job = {}
@@ -159,7 +171,7 @@ function Comic.scan(ui)
     local p = 1
     local UIManager = require("ui/uimanager")
     local function step()
-        if ui._minimalhome_scan ~= job or not ui._minimalhome_comic then return end
+        if ui._minimalhome_scan ~= job or not ui._minimalhome_comic or not alive(ui) then return end
         local stop = math.min(total - 1, p + Comic.SCAN_STEP - 1)
         for q = p, stop do
             if Comic.pageIsBlank(doc, q, total) then ui._minimalhome_blank[q] = true end
@@ -176,6 +188,28 @@ function Comic.scan(ui)
     UIManager:scheduleIn(0.5, step)
 end
 
+--- After a comic page is drawn: if it came out blank, go on in the same direction.
+function Comic.afterPaint(ui, view, bb, x, y)
+    local d = view.dimen or view.visible_area
+    local w = d and d.w or bb:getWidth()
+    local h = d and d.h or bb:getHeight()
+    if not Comic.isBlank(bb, x or 0, y or 0, w, h) then
+        ui._minimalhome_skips = 0
+        return
+    end
+    local dir = ui._minimalhome_dir or 1
+    local page = ui.document and ui.document.getCurrentPage and ui.document:getCurrentPage() or 1
+    local total = ui.document and ui.document.getPageCount and ui.document:getPageCount() or 1
+    if (dir > 0 and page >= total) or (dir < 0 and page <= 1) then return end
+    if (ui._minimalhome_skips or 0) >= Comic.MAX_SKIPS then return end
+    ui._minimalhome_skips = (ui._minimalhome_skips or 0) + 1
+    ui._minimalhome_skip_pending = true
+    require("ui/uimanager"):nextTick(function()
+        ui._minimalhome_skip_pending = nil
+        if ui._minimalhome_comic and alive(ui) then ui:handleEvent(Event:new("GotoViewRel", dir)) end
+    end)
+end
+
 local function hookBlankPages(ui)
     local view = ui.view
     if not view or view._minimalhome_blank_hook then return end
@@ -183,25 +217,9 @@ local function hookBlankPages(ui)
     local orig = view.paintTo
     view.paintTo = function(self, bb, x, y)
         orig(self, bb, x, y)
-        if not ui._minimalhome_comic or ui._minimalhome_skip_pending then return end
-        local d = self.dimen or (self.visible_area)
-        local w = d and d.w or bb:getWidth()
-        local h = d and d.h or bb:getHeight()
-        if not Comic.isBlank(bb, x or 0, y or 0, w, h) then
-            ui._minimalhome_skips = 0
-            return
-        end
-        local dir = ui._minimalhome_dir or 1
-        local page = ui.document and ui.document.getCurrentPage and ui.document:getCurrentPage() or 1
-        local total = ui.document and ui.document.getPageCount and ui.document:getPageCount() or 1
-        if (dir > 0 and page >= total) or (dir < 0 and page <= 1) then return end
-        if (ui._minimalhome_skips or 0) >= Comic.MAX_SKIPS then return end
-        ui._minimalhome_skips = (ui._minimalhome_skips or 0) + 1
-        ui._minimalhome_skip_pending = true
-        require("ui/uimanager"):nextTick(function()
-            ui._minimalhome_skip_pending = nil
-            if ui._minimalhome_comic then ui:handleEvent(Event:new("GotoViewRel", dir)) end
-        end)
+        if not ui._minimalhome_comic or ui._minimalhome_skip_pending or not alive(ui) then return end
+        local ok, err = pcall(Comic.afterPaint, ui, self, bb, x, y)
+        if not ok then logger.warn("MinimalHome: comic blank check:", err) end
     end
     -- remember which way the reader is going
     local last = nil
@@ -211,8 +229,9 @@ local function hookBlankPages(ui)
             ui._minimalhome_dir = new_page > last and 1 or -1
         end
         last = new_page
-        if ui._minimalhome_comic and new_page and ui._minimalhome_blank then
-            local total = ui.document:getPageCount()
+        if ui._minimalhome_comic and new_page and ui._minimalhome_blank and alive(ui) then
+            local ok, total = pcall(ui.document.getPageCount, ui.document)
+            if not ok then total = ui._minimalhome_blank_total end
             if total ~= ui._minimalhome_blank_total then
                 Comic.scan(ui) -- layout changed: page numbers moved
             elseif ui._minimalhome_blank[new_page] then

@@ -815,7 +815,7 @@ check("comic mode: found by sampling, full screen, Auto / On / Off", function()
     UIManager.nextTick = function(_, f) ticks[#ticks + 1] = f end
     local sent = {}
     local ui4 = { _minimalhome_comic = true,
-        document = { getCurrentPage = function() return 5 end, getPageCount = function() return 50 end },
+        document = { _document = {}, getCurrentPage = function() return 5 end, getPageCount = function() return 50 end },
         view = { dimen = { w = 1264, h = 1680 }, paintTo = function() end },
         handleEvent = function(_, ev) sent[#sent + 1] = ev end }
     Comic.hookBlankPages(ui4)
@@ -827,7 +827,7 @@ check("comic mode: found by sampling, full screen, Auto / On / Off", function()
 
     -- known blank pages (found ahead from the HTML) are passed over before being drawn
     local html = { [3] = '<div><img src="p3.jpg"/></div>', [4] = "<p> </p>", [5] = "<p>Chapter 2</p>" }
-    local doc = { getPageXPointer = function(_, p) return p end,
+    local doc = { _document = {}, getPageXPointer = function(_, p) return p end,
         getHTMLFromXPointers = function(_, a) return html[a] or "<img/>" end,
         getPageCount = function() return 10 end, getCurrentPage = function() return 4 end }
     assert(not Comic.pageIsBlank(doc, 3, 10), "picture page")
