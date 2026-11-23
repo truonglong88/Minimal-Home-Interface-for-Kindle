@@ -217,6 +217,18 @@ function FontPanel:build()
         self:segments(w, { { "Left", 1 }, { "Justify", 0 } }, self:leftAligned() and 1 or 0,
             function(v) self:setLeft(v == 1) end),
     }
+    if self.ui and self.ui.rolling then
+        -- picture-only books fill the screen (mh/comic)
+        local Comic = require("mh/comic")
+        for _, wdg in ipairs({
+            C.space(1, px(52)),
+            HorizontalGroup:new{ align = "center", self:label("COMIC MODE · "),
+                C.text(Comic.hint(self.ui), "sans_bold", 30, self.col.fg) },
+            C.space(1, px(18)),
+            self:segments(w, { { "Auto", "auto" }, { "On", "on" }, { "Off", "off" } }, Comic.mode(self.ui),
+                function(v) UIManager:nextTick(function() Comic.setMode(self.ui, v); self:rebuild() end) end),
+        }) do table.insert(content, wdg) end
+    end
     local h = px(44) + content:getSize().h + px(64)
     self.panel_h = h
     self.panel_y = self.dimen.h - h

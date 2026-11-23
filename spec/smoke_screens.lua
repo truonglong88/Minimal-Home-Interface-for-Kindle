@@ -750,6 +750,61 @@ check("Sync books: reads the folder again and says how many are new", function()
     end)
 end)
 
+check("comic mode: found by sampling, full screen, Auto / On / Off", function()
+    local Comic = require("mh/comic")
+    local function fakeUI(text_for)
+        local store = {}
+        local events = {}
+        local ui
+        ui = {
+            rolling = true,
+            doc_settings = {
+                readSetting = function(_, k) return store[k] end,
+                saveSetting = function(_, k, v) store[k] = v end,
+            },
+            document = {
+                configurable = {},
+                getPageCount = function() return 200 end,
+                getPageXPointer = function(_, p) return p end,
+                getTextFromXPointers = function(_, a) return text_for(a) end,
+            },
+            styletweak = { getCssText = function() return "/* tweaks */" end },
+            view = { footer = { mode = 1, mode_list = { off = 0 },
+                applyFooterMode = function(f, m) f.mode = m end } },
+            handleEvent = function(_, ev) events[#events + 1] = ev.handler end,
+        }
+        return ui, store, events
+    end
+    local prose = string.rep("lorem ipsum dolor sit amet ", 40)
+    -- a comic whose first pages are text (title, credits): still a comic
+    local ui, store, events = fakeUI(function(p) return p <= 6 and prose or "" end)
+    Comic.prepare(ui)
+    Comic.onReady(ui)
+    assert(store.minimalhome_comic_auto == true, "picture book found")
+    assert(ui._minimalhome_comic and ui.view.footer.mode == 0, "status line hidden")
+    assert(ui.document.configurable.t_page_margin == 0, "no margins")
+    assert(ui.styletweak:getCssText():find("margin: 0", 1, true), "comic CSS added")
+    local n = #events
+    -- next time the book opens: decided already, set up before layout, nothing re-rendered
+    local ui2 = fakeUI(function() return "" end)
+    ui2.doc_settings = ui.doc_settings
+    Comic.prepare(ui2)
+    assert(ui2._minimalhome_comic and ui2.view.footer.mode == 0, "remembered")
+    Comic.onReady(ui2)
+    -- a novel with a few picture pages stays a text book
+    local ui3, store3 = fakeUI(function(p) return (p % 50 == 0) and "" or prose end)
+    Comic.prepare(ui3); Comic.onReady(ui3)
+    assert(store3.minimalhome_comic_auto == false and not ui3._minimalhome_comic, "novel untouched")
+    -- On / Off by hand
+    Comic.setMode(ui3, "on")
+    assert(ui3._minimalhome_comic and ui3.view.footer.mode == 0, "On")
+    Comic.setMode(ui3, "off")
+    assert(ui3._minimalhome_comic == false and ui3.view.footer.mode == 1, "Off: status line back")
+    assert(ui3.document.configurable.t_page_margin == require("mh/reader").MARGINS.t, "Off: our margins back")
+    assert(Comic.hint(ui3) == "Always as a text book", Comic.hint(ui3))
+    assert(n > 0, "events sent on the first open")
+end)
+
 check("battery shows a bolt while charging", function()
     local Device = require("device")
     local p = Device:getPowerDevice()

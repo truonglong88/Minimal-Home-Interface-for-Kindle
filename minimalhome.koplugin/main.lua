@@ -113,6 +113,8 @@ function MinimalHome:onReaderReady()
     if not isFileManager(self.ui) then
         require("mh/reader").styleBook(self.ui)
         require("mh/reader").reassertZones(self.ui)
+        -- picture-only books: full screen, one picture per page
+        pcall(function() require("mh/comic").onReady(self.ui) end)
     end
 end
 

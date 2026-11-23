@@ -5,6 +5,10 @@
 Changes made since the last push to GitHub. They get the plugin version of the
 next push.
 
+- Comic mode for picture-only EPUB, MOBI, AZW3 and FB2: no clock, no status
+  line, no margins; each picture fills the screen and one tap turns one comic
+  page. Found by looking at 10 pages spread through the book (once per book);
+  Font panel › COMIC MODE: Auto / On / Off
 - Settings › Device: *Storage* row, "2.3 GB free of 4 GB" with a used / free bar
 - Home: *Sync books* link next to ALL BOOKS reads the documents folder again
   (books copied over SSH or USB while Home is open) and says how many are new;

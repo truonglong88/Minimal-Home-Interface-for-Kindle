@@ -369,6 +369,8 @@ function Reader.registerMenuZones(ui)
                 "tap_backward", "tap_forward", "minimalhome_menu_bottom" },
             handler = function()
                 if not Prefs.get("reader_style") then return false end
+                -- comic mode has no time line: the tap turns the page as usual
+                if ui._minimalhome_comic then return false end
                 Reader.nextTimeScope(ui)
                 local footer = ui.view and ui.view.footer
                 if footer and footer.onUpdateFooter then footer:onUpdateFooter(true) end
@@ -503,6 +505,7 @@ function Reader.reassertZones(ui)
 end
 
 function Reader.attach(ui)
+    pcall(function() require("mh/comic").prepare(ui) end)
     if not Prefs.get("reader_style") then return end
     if (Prefs.get("reader_style_version") or 0) < Reader.STYLE_VERSION then return end
 
