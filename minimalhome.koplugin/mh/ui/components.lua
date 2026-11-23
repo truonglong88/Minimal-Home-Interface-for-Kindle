@@ -590,20 +590,25 @@ end
      background-coloured halo, then the bolt, so it shows on the filled part of
      the battery as well as on the empty part. ]]
 local BOLT = { { 0.62, 0.0 }, { 0.12, 0.58 }, { 0.46, 0.58 }, { 0.36, 1.0 }, { 0.88, 0.40 }, { 0.54, 0.40 } }
-local Bolt = Widget:extend{ w = 0, h = 0, fg = nil, bg = nil }
+-- the same bolt lying on its side (pointing right), drawn inside the empty battery
+local BOLT_SIDE = {}
+for i, p in ipairs(BOLT) do BOLT_SIDE[i] = { 1 - p[2], p[1] } end
+local Bolt = Widget:extend{ w = 0, h = 0, fg = nil, bg = nil, sideways = false }
 function Bolt:getSize() return Geom:new{ w = self.w, h = self.h } end
 function Bolt:paintTo(bb, x, y)
     self.dimen = Geom:new{ x = x, y = y, w = self.w, h = self.h }
     local function pts(grow)
         local out = {}
-        for _, p in ipairs(BOLT) do
+        for _, p in ipairs(self.sideways and BOLT_SIDE or BOLT) do
             local cx, cy = (p[1] - 0.5) * (self.w + 2 * grow) + self.w / 2, (p[2] - 0.5) * (self.h + 2 * grow) + self.h / 2
             out[#out + 1] = { cx, cy }
         end
         return out
     end
-    local halo = math.max(1, Theme.px(2))
-    fillPolygon(bb, x, y, pts(halo), self.bg)
+    if self.bg then
+        local halo = math.max(1, Theme.px(2))
+        fillPolygon(bb, x, y, pts(halo), self.bg)
+    end
     fillPolygon(bb, x, y, pts(0), self.fg)
 end
 C.Bolt = Bolt
@@ -638,19 +643,21 @@ function C.statusBar(width, col, size, bold, wifi, clock_only)
     local powerd = not clock_only and Device:hasBattery() and Device:getPowerDevice()
     if powerd then
         local cap = powerd:getCapacity() or 0
+        local charging = false
+        pcall(function() charging = powerd:isCharging() end)
         local k = size / 30
         local bw, bh, bt = Theme.px(46 * k), Theme.px(24 * k), math.max(1, Theme.px((bold and 4.2 or 3) * k))
         local inner = math.max(1, Theme.px(2 * k))
-        local fill_w = math.max(0, math.floor((bw - 2 * bt - 2 * inner) * cap / 100))
+        -- charging: an empty battery with a bolt on its side, easier to see than a fill
+        local fill_w = charging and 0 or math.max(0, math.floor((bw - 2 * bt - 2 * inner) * cap / 100))
         local body = C.box(bw, bh, Rect:new{ w = fill_w, h = bh - 2 * bt - 2 * inner, color = col.muted },
             { border = bt, border_color = col.muted, pad = bt + inner }) -- square: small rounded corners break up on e-ink
-        local charging = false
-        pcall(function() charging = powerd:isCharging() end)
         if charging then
-            -- lightning bolt over the battery while it charges
-            local bolt_h = bh + Theme.px(8 * k)
-            local bolt = Bolt:new{ w = math.floor(bolt_h * 0.62), h = bolt_h, fg = col.muted, bg = col.bg or Blitbuffer.COLOR_WHITE }
-            bolt.overlap_offset = { math.floor((bw - bolt.w) / 2), math.floor((bh - bolt_h) / 2) }
+            -- a lightning bolt lying on its side inside the empty battery
+            local ih = bh - 2 * bt - 2 * inner
+            local bolt_w = math.floor((bw - 2 * bt - 2 * inner) * 0.72)
+            local bolt = Bolt:new{ w = bolt_w, h = ih, fg = col.muted, sideways = true }
+            bolt.overlap_offset = { math.floor((bw - bolt_w) / 2), bt + inner }
             body = OverlapGroup:new{ dimen = Geom:new{ w = bw, h = bh }, allow_mirroring = false, body, bolt }
         end
         local battery = HorizontalGroup:new{
