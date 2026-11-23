@@ -803,6 +803,27 @@ check("comic mode: found by sampling, full screen, Auto / On / Off", function()
     assert(ui3.document.configurable.t_page_margin == require("mh/reader").MARGINS.t, "Off: our margins back")
     assert(Comic.hint(ui3) == "Always as a text book", Comic.hint(ui3))
     assert(n > 0, "events sent on the first open")
+    -- blank page check: an all-white page is blank; one dark pixel in a sampled cell is not
+    local white = { getPixel = function() return { a = 255 } end }
+    assert(Comic.isBlank(white, 0, 0, 1264, 1680), "white page is blank")
+    local ink = { getPixel = function(_, x, y) return { a = (x > 600 and y > 800) and 20 or 255 } end }
+    assert(not Comic.isBlank(ink, 0, 0, 1264, 1680), "a picture is not blank")
+    -- after a blank page is drawn in comic mode, the reader goes on in the same direction
+    local UIManager = require("ui/uimanager")
+    local orig_tick = UIManager.nextTick
+    local ticks = {}
+    UIManager.nextTick = function(_, f) ticks[#ticks + 1] = f end
+    local sent = {}
+    local ui4 = { _minimalhome_comic = true,
+        document = { getCurrentPage = function() return 5 end, getPageCount = function() return 50 end },
+        view = { dimen = { w = 1264, h = 1680 }, paintTo = function() end },
+        handleEvent = function(_, ev) sent[#sent + 1] = ev end }
+    Comic.hookBlankPages(ui4)
+    ui4.view:onPageUpdate(4); ui4.view:onPageUpdate(5)
+    ui4.view:paintTo(white, 0, 0)
+    for _, f in ipairs(ticks) do f() end
+    UIManager.nextTick = orig_tick
+    assert(sent[1] and sent[1].handler == "onGotoViewRel" and sent[1].args[1] == 1, "blank page skipped forward")
 end)
 
 check("battery shows a bolt while charging", function()
