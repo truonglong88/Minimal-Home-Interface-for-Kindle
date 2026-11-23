@@ -34,6 +34,21 @@ local fake_ui = {
     SSH = { isRunning = function() return false end, start = function() end, stop = function() end },
 }
 
+check("storage label and row", function()
+    local D = require("mh/device")
+    assert(D.storageLabel(2.3e9, 4e9) == "2.3 GB free of 4 GB", D.storageLabel(2.3e9, 4e9))
+    assert(D.storageLabel(850e6, 4e9) == "850 MB free of 4 GB", D.storageLabel(850e6, 4e9))
+    local util = require("util")
+    local orig = util.diskUsage
+    util.diskUsage = function() return { total = 4e9, used = 1.7e9, available = 2.3e9 } end
+    local free, total = D.storage("/mnt/us/documents")
+    assert(free == 2.3e9 and total == 4e9, "storage read")
+    local Settings = require("mh/ui/settings")
+    local page = Settings:new{ ui = fake_ui }
+    paint(page)
+    util.diskUsage = orig
+end)
+
 check("settings page", function()
     local Settings = require("mh/ui/settings")
     local page = Settings:new{ ui = fake_ui }

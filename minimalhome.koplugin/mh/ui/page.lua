@@ -101,7 +101,10 @@ end
 function Page:row(opts)
     local w = self:contentWidth()
     local right
-    if opts.button then
+    if opts.bar then
+        -- a used / free bar on the right (Storage); the row does nothing when tapped
+        right = C.progress(px(300), px(16), opts.bar, Blitbuffer.gray(0.2), self.col.fg, px(8))
+    elseif opts.button then
         -- an outlined button on the right (the whole row is its tap area)
         local color = opts.button_muted and self.col.muted or self.col.fg
         local t = C.text(opts.button, "sans_bold", 32, color)

@@ -450,6 +450,29 @@ function D.toggleSSH(ui)
     end)
 end
 
+-- Storage ------------------------------------------------------------------------
+
+--- Free and total bytes on the partition that holds the books, or nil.
+function D.storage(path)
+    return try("storage", function()
+        local u = require("util").diskUsage(path or require("mh/data/prefs").booksFolder())
+        if not u or not u.total or u.total <= 0 then return nil end
+        return u.available or (u.total - (u.used or 0)), u.total
+    end)
+end
+
+--- "2.3 GB free of 4 GB" (decimal units, as on a computer).
+function D.storageLabel(free, total)
+    local function size(b)
+        if b >= 1e9 then
+            local s = string.format("%.1f", b / 1e9):gsub("%.0$", "")
+            return s .. " GB"
+        end
+        return string.format("%d MB", math.floor(b / 1e6 + 0.5))
+    end
+    return size(free) .. " free of " .. size(total)
+end
+
 -- Battery ------------------------------------------------------------------------
 
 function D.battery()

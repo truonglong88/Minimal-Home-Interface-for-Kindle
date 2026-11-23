@@ -383,13 +383,19 @@ function Settings:blocks()
     local device = {
         { label = "Sleep after", sub = "When not in use", value = D.sleepLabel(D.sleepMinutes()),
           action = function() D.cycleSleep(ui); self:refresh() end },
+    }
+    local free, total = D.storage()
+    if free and total then
+        table.insert(device, { label = "Storage", sub = D.storageLabel(free, total),
+            bar = math.max(0, math.min(1, (total - free) / total)) })
+    end
+    table.insert(device,
         { label = "Version " .. Updater.version(),
           sub = self.check_state == "done" and "Up to date · checked just now"
               or (Updater.channelName() .. " · " .. deviceName()),
           button = self.check_state == "checking" and "Checking…" or "Check update",
           button_muted = self.check_state == "checking",
-          action = function() self:checkNow() end },
-    }
+          action = function() self:checkNow() end })
     if ui and ui.menu then
         table.insert(device, { label = "All KOReader settings", sub = "The full KOReader menu",
             action = function() ui.menu:onShowMenu() end })
