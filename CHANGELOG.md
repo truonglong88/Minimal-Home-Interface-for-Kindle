@@ -18,8 +18,8 @@ next push.
   draws the next page ahead, so page turns are quick
 - Fix: crash when leaving a comic while its blank pages were still being looked
   for (the check went on reading the closed book)
-- Charging: the battery icon is shown empty with a lightning bolt lying on its
-  side inside it
+- Charging: the battery icon is shown empty with a big lightning bolt lying on
+  its side, filling it wall to wall
 - Settings › Device: *Storage* row, "2.3 GB free of 4 GB" with a used / free bar
 - Home: *Sync books* link next to ALL BOOKS reads the documents folder again
   (books copied over SSH or USB while Home is open) and says how many are new;

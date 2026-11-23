@@ -653,11 +653,11 @@ function C.statusBar(width, col, size, bold, wifi, clock_only)
         local body = C.box(bw, bh, Rect:new{ w = fill_w, h = bh - 2 * bt - 2 * inner, color = col.muted },
             { border = bt, border_color = col.muted, pad = bt + inner }) -- square: small rounded corners break up on e-ink
         if charging then
-            -- a lightning bolt lying on its side inside the empty battery
-            local ih = bh - 2 * bt - 2 * inner
-            local bolt_w = math.floor((bw - 2 * bt - 2 * inner) * 0.72)
-            local bolt = Bolt:new{ w = bolt_w, h = ih, fg = col.muted, sideways = true }
-            bolt.overlap_offset = { math.floor((bw - bolt_w) / 2), bt + inner }
+            -- a big lightning bolt lying on its side, filling the empty battery wall to wall
+            local grow = math.max(1, math.floor(bt / 4))
+            local bolt_w, bolt_h = bw - 2 * bt, bh - 2 * bt + 2 * grow
+            local bolt = Bolt:new{ w = bolt_w, h = bolt_h, fg = col.muted, sideways = true }
+            bolt.overlap_offset = { bt, bt - grow }
             body = OverlapGroup:new{ dimen = Geom:new{ w = bw, h = bh }, allow_mirroring = false, body, bolt }
         end
         local battery = HorizontalGroup:new{
