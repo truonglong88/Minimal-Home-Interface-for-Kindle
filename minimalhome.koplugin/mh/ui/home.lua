@@ -780,12 +780,13 @@ function Home:updateChrome()
     end
 end
 
+Home.BAR_TOP, Home.BAR_BOTTOM = 160, 48 -- design px
+
 function Home:scrollbar()
     local vp = self.viewport
-    local top, bottom = px(160), px(48)
+    local top, bottom = px(Home.BAR_TOP), px(Home.BAR_BOTTOM)
     local track_h = self.dimen.h - top - bottom
-    local total = vp:totalHeight()
-    local thumb_h = math.max(px(100), math.floor(track_h * vp.h / total))
+    local thumb_h = C.barThumb(track_h, vp)
     local y = math.floor((track_h - thumb_h) * vp.scroll / math.max(1, vp:maxScroll()))
     local bar = OverlapGroup:new{
         dimen = Geom:new{ w = px(12), h = track_h },
@@ -845,7 +846,34 @@ function Home:calm()
     return time.now() < self.calm_until
 end
 
+--- Drag the scrollbar: the list follows the finger (repainted at most every 0.15 s).
+function Home:dragBar(y, final)
+    self._bar_last = y
+    local vp = self.viewport
+    local top = px(Home.BAR_TOP)
+    local track_h = self.dimen.h - top - px(Home.BAR_BOTTOM)
+    local moved = vp:scrollTo(C.barOffset(y, top, track_h, vp))
+    local now = time.now()
+    if final or (moved and (not self._bar_paint or now - self._bar_paint > time.s(0.15))) then
+        self._bar_paint = now
+        self:updateChrome()
+        UIManager:setDirty(self, final and "ui" or "fast")
+    end
+end
+
+function Home:barReach(p)
+    return self.viewport and self.viewport:maxScroll() > 0
+        and C.onBar(p, self.dimen.w, self.view_top or px(Home.BAR_TOP), self.dimen.h - px(Home.BAR_BOTTOM))
+end
+
 function Home:onMHPan(_, ges)
+    if not self._pan_dy and not self._bar_drag and ges and self:barReach(C.gestureStart(ges)) then
+        self._bar_drag = true
+    end
+    if self._bar_drag then
+        if ges and ges.pos then self:dragBar(ges.pos.y) end
+        return true
+    end
     if self._swallow or (not self._pan_dy and self:calm()) then
         self._swallow = true
         return true
@@ -857,7 +885,12 @@ function Home:onMHPan(_, ges)
     return true
 end
 
-function Home:onMHPanRelease()
+function Home:onMHPanRelease(_, ges)
+    if self._bar_drag then
+        self._bar_drag = nil
+        self:dragBar(ges and ges.pos and ges.pos.y or self._bar_last or 0, true)
+        return true
+    end
     if self._swallow then
         self._swallow = nil
         return true
@@ -881,6 +914,12 @@ function Home:onMHSwipe(_, ges)
         return true
     end
     self._pan_dy = nil
+    if ges and (ges.direction == "north" or ges.direction == "south") and self:barReach(ges.pos) then
+        -- a quick drag on the bar: jump to where the finger let go
+        local e = C.swipeEnd(ges)
+        if e then self:dragBar(e.y, true) end
+        return true
+    end
     local dir = ges and ges.direction
     if dir == "south" and ges.pos and self:startsOnStatusBar(ges.pos.y)
             and (ges.distance or 0) >= px(Home.PULL_MIN) then

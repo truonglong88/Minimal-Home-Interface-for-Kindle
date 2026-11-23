@@ -613,6 +613,47 @@ function Bolt:paintTo(bb, x, y)
 end
 C.Bolt = Bolt
 
+--[[ Dragging a scrollbar (Home, Settings, Contents…). The bar sits along the
+     right edge between `top` and `bottom`; a drag that starts within reach of it
+     moves the list so the thumb follows the finger. ]]
+C.BAR_REACH = 90 -- design px from the right edge where a drag grabs the bar
+
+--- Thumb height for a viewport, as the bars draw it.
+function C.barThumb(track_h, vp)
+    return math.max(Theme.px(100), math.floor(track_h * vp.h / math.max(1, vp:totalHeight())))
+end
+
+--- Is screen point p within reach of the bar?
+function C.onBar(p, screen_w, top, bottom_y)
+    return p and p.x and p.x >= screen_w - Theme.px(C.BAR_REACH) and p.y >= top and p.y <= bottom_y
+end
+
+--- Scroll offset that puts the thumb's middle under finger y.
+function C.barOffset(y, top, track_h, vp)
+    local thumb_h = C.barThumb(track_h, vp)
+    local room = math.max(1, track_h - thumb_h)
+    local ratio = math.max(0, math.min(1, (y - top - thumb_h / 2) / room))
+    return math.floor(ratio * vp:maxScroll() + 0.5)
+end
+
+--- Where a pan or swipe started (pans carry start_pos; older ones only pos + relative).
+function C.gestureStart(ges)
+    if not ges then return nil end
+    if ges.start_pos then return ges.start_pos end
+    if ges.ges == "swipe" then return ges.pos end
+    if ges.pos and ges.relative then return { x = ges.pos.x - ges.relative.x, y = ges.pos.y - ges.relative.y } end
+    return ges.pos
+end
+
+--- Where a swipe ended (its pos is where it started).
+function C.swipeEnd(ges)
+    local p, d = ges.pos, ges.distance or 0
+    if not p then return nil end
+    if ges.direction == "north" then return { x = p.x, y = p.y - d } end
+    if ges.direction == "south" then return { x = p.x, y = p.y + d } end
+    return { x = p.x, y = p.y }
+end
+
 --- A battery drawn at any size (design: the battery 5 % popup): outline, nub,
 --- and a fill for `cap` percent. Square corners, as in the status bar.
 function C.batteryIcon(w, h, cap, color)

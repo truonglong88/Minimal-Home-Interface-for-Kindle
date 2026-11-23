@@ -230,7 +230,7 @@ function Page:updateChrome()
     if vp.scroll > 0 and vp:maxScroll() > 0 then
         local top, bottom = self.view_top, px(48)
         local track_h = self.dimen.h - top - bottom
-        local thumb_h = math.max(px(100), math.floor(track_h * vp.h / vp:totalHeight()))
+        local thumb_h = C.barThumb(track_h, vp)
         local y = math.floor((track_h - thumb_h) * vp.scroll / math.max(1, vp:maxScroll()))
         local bar = OverlapGroup:new{
             dimen = Geom:new{ w = px(12), h = track_h },
@@ -294,7 +294,34 @@ function Page:fromBottomEdge(y)
     return self.swipe_home and y and y >= self.dimen.h - px(Page.EDGE)
 end
 
+--- Drag the scrollbar: the page follows the finger (repainted at most every 0.15 s).
+function Page:dragBar(y, final)
+    self._bar_last = y
+    local vp = self.viewport
+    local top = self.view_top
+    local track_h = self.dimen.h - top - px(48)
+    local moved = vp:scrollTo(C.barOffset(y, top, track_h, vp))
+    local now = os.clock()
+    if final or (moved and (not self._bar_paint or now - self._bar_paint > 0.15)) then
+        self._bar_paint = now
+        self:updateChrome()
+        UIManager:setDirty(self, final and "ui" or "fast")
+    end
+end
+
+function Page:barReach(p)
+    return self.viewport and self.view_top and self.viewport:maxScroll() > 0
+        and C.onBar(p, self.dimen.w, self.view_top, self.dimen.h - px(Page.EDGE)) -- the edge strip stays Home
+end
+
 function Page:onMHPan(_, ges)
+    if not self._pan_dy and not self._bar_drag and ges and self:barReach(C.gestureStart(ges)) then
+        self._bar_drag = true
+    end
+    if self._bar_drag then
+        if ges and ges.pos then self:dragBar(ges.pos.y) end
+        return true
+    end
     if ges and ges.relative then
         if not self._pan_dy and ges.pos then self._pan_start_y = ges.pos.y - ges.relative.y end
         self._pan_dy = ges.relative.y
@@ -318,7 +345,12 @@ function Page:showQuickPanel()
     if not ok then require("logger").warn("MinimalHome: quick panel:", err) end
 end
 
-function Page:onMHPanRelease()
+function Page:onMHPanRelease(_, ges)
+    if self._bar_drag then
+        self._bar_drag = nil
+        self:dragBar(ges and ges.pos and ges.pos.y or self._bar_last or 0, true)
+        return true
+    end
     if self._pan_dy then
         local dy, start = self._pan_dy, self._pan_start_y
         self._pan_dy, self._pan_start_y = nil, nil
@@ -335,6 +367,13 @@ end
 
 function Page:onMHSwipe(_, ges)
     self._pan_dy = nil
+    if ges and (ges.direction == "north" or ges.direction == "south") and self:barReach(ges.pos)
+            and not self:fromBottomEdge(ges.pos.y) and not self:fromTopEdge(ges.pos.y) then
+        -- a quick drag on the bar: jump to where the finger let go
+        local e = C.swipeEnd(ges)
+        if e then self:dragBar(e.y, true) end
+        return true
+    end
     local dir = ges and ges.direction
     local dist = (ges and ges.distance or 0) * Page.FLICK
     local long = (ges and ges.distance or 0) >= px(Page.PULL)
