@@ -90,53 +90,6 @@ function D.keepPortraitRotation(ui)
     end)
 end
 
---- The way the Kindle is held now: upright (0) or upside down (2). Sideways
---- counts as upright (we never rotate sideways).
-function D.heldRotation()
-    local m = Device.screen:getRotationMode() or 0
-    return m % 2 == 1 and 0 or m
-end
-
---- Going from a book to Home (and back) keeps the screen the way the Kindle is
---- held. KOReader would turn it to its own file browser default, or to the
---- rotation the book was last read in.
-function D.followHeldRotation(ui)
-    try("follow rotation", function()
-        local FM = require("apps/filemanager/filemanager")
-        if not FM._minimalhome_rotation then
-            FM._minimalhome_rotation = true
-            local orig = FM.setRotationMode
-            FM.setRotationMode = function(self, ...)
-                local rl = require("mh/rotlog")
-                rl.log("file manager opens, before")
-                if not require("mh/data/prefs").get("enabled") then return orig(self, ...) end
-                if G_reader_settings:isTrue("lock_rotation") then return end
-                local held = D.heldRotation()
-                self:onSetRotationMode(held)
-                rl.log("file manager opens, after (kept " .. tostring(held) .. ")")
-            end
-        end
-        -- a book opening: its saved rotation is read right after the plugins are
-        -- made, so make it the current one
-        if ui and ui.document and ui.doc_settings and not G_reader_settings:isTrue("lock_rotation")
-                and require("mh/data/prefs").get("enabled") then
-            local key = ui.paging and "kopt_rotation_mode" or "copt_rotation_mode"
-            require("mh/rotlog").log("book opens with its saved rotation", key .. "=" .. tostring(ui.doc_settings.readSetting
-                and ui.doc_settings:readSetting(key)) .. " → " .. D.heldRotation())
-            ui.doc_settings:saveSetting(key, D.heldRotation())
-            local view = ui.view
-            if view and view.onSetRotationMode and not view._minimalhome_rotlog then
-                view._minimalhome_rotlog = true
-                local orig_v = view.onSetRotationMode
-                view.onSetRotationMode = function(v, mode, ...)
-                    require("mh/rotlog").log("book turned", mode)
-                    return orig_v(v, mode, ...)
-                end
-            end
-        end
-    end)
-end
-
 function D.toggleRotationLock()
     try("rotation lock", function()
         G_reader_settings:flipNilOrFalse("input_ignore_gsensor")

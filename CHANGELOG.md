@@ -5,9 +5,10 @@
 Changes made since the last push to GitHub. They get the plugin version of the
 next push.
 
-- Home and books keep the way the Kindle is held (back on, after being
-  switched off in 0.1.65), and every rotation step is written to crash.log
-  ("MinimalHome rot:") to find out why Home can still come up the wrong way.
+- Rolled back: the change to keep the screen the way the Kindle is held when
+  going between a book and Home (0.1.63–0.1.66). On the device it could leave
+  the picture upside down from the way the Kindle was held. Rotation works as
+  in 0.1.62 again.
 - Comic mode (EPUB, MOBI and CBZ) shows the clock at the top left and the % of
   the book at the bottom right again, on small white labels laid over the
   picture, pushed right against the left and right edges. The picture keeps the whole screen.
