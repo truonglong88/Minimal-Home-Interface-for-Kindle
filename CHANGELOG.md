@@ -5,6 +5,9 @@
 Changes made since the last push to GitHub. They get the plugin version of the
 next push.
 
+- Fixed: after reading with the Kindle upside down, going back to Home (swipe
+  up, or "Back to library" at the end of a book) turned the screen back to
+  upright. Home and books now keep the way the Kindle is held.
 - Comic mode (EPUB, MOBI and CBZ) shows the clock at the top left and the % of
   the book at the bottom right again, on small white labels laid over the
   picture. The picture keeps the whole screen.

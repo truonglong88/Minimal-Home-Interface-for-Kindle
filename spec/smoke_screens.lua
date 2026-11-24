@@ -1128,6 +1128,30 @@ check("updates: check GitHub, dot on Home, card in Settings, failed update keeps
     Prefs.set("update_checked_at", nil)
 end)
 
+check("rotation: Home and books follow the way the Kindle is held", function()
+    local D = require("mh/device")
+    local Screen = require("device").screen
+    local Prefs = require("mh/data/prefs")
+    local was = Prefs.get("enabled")
+    Prefs.set("enabled", true)
+    local FM = require("apps/filemanager/filemanager")
+    local set = {}
+    FM.setRotationMode = function() set[#set + 1] = "default" end
+    FM.onSetRotationMode = function(_, m) set[#set + 1] = m end
+    FM._minimalhome_rotation = nil
+    local store = {}
+    local book = { document = {}, doc_settings = { saveSetting = function(_, k, v) store[k] = v end } }
+    Screen:setRotationMode(2) -- reading upside down
+    D.followHeldRotation(book)
+    assert(store.copt_rotation_mode == 2, "a book opens the way it is held")
+    FM:setRotationMode() -- back to Home
+    assert(set[1] == 2, "Home stays upside down, not KOReader's default: " .. tostring(set[1]))
+    Screen:setRotationMode(1)
+    assert(D.heldRotation() == 0, "sideways counts as upright")
+    Screen:setRotationMode(0)
+    Prefs.set("enabled", was)
+end)
+
 check("finished screen", function()
     local Finished = require("mh/ui/finished")
     local ui = {

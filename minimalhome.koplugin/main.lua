@@ -46,6 +46,7 @@ function MinimalHome:init()
     pcall(function() require("mh/messages").install() end)
     -- low battery warnings (20 %: snackbar, 5 %: popup)
     pcall(function() require("mh/battery").start() end)
+    pcall(function() require("mh/device").followHeldRotation(self.ui) end)
     if isFileManager(self.ui) then
         -- the screen turns upside down with the device, never sideways
         pcall(function() require("mh/device").keepPortraitRotation(self.ui) end)
