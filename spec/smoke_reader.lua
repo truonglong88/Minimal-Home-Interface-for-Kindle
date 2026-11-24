@@ -192,5 +192,48 @@ do
     check(Reader.muteKOReaderZones(zui) == 0, "muting twice changes nothing")
 end
 
+-- Kindle held upside down: KOReader's own gesture code turns the touch around
+-- (positions, start, direction, relative move); our edge pulls must then still
+-- mean "up from the bottom you see" and "down from the top you see".
+do
+    package.preload["ffi/posix_h"] = package.preload["ffi/posix_h"] or function() return true end
+    local okgd, GD = pcall(require, "device/gesturedetector")
+    if okgd then
+        local Geom = require("ui/geometry")
+        local Scr = require("device").screen
+        local H = Scr:getHeight()
+        local Page = require("mh/ui/page")
+        local Theme = require("mh/theme")
+        Prefs.set("reader_style", true)
+        local fake = setmetatable({ screen = setmetatable({ getTouchRotation = function() return 2 end,
+            DEVICE_ROTATED_UPRIGHT = 0, DEVICE_ROTATED_CLOCKWISE = 1, DEVICE_ROTATED_UPSIDE_DOWN = 2,
+            DEVICE_ROTATED_COUNTER_CLOCKWISE = 3 }, { __index = Scr }) }, { __index = GD })
+        local function swipe(dir, y0, dist)
+            return fake:adjustGesCoordinate{ ges = "swipe", direction = dir, distance = dist,
+                pos = Geom:new{ x = 600, y = y0 }, start_pos = Geom:new{ x = 600, y = y0 } }
+        end
+        -- physically: down from the physical top = up from the bottom the reader sees
+        local up = swipe("south", 20, 400)
+        check(up.direction == "north" and Reader.edgePull(up, "bottom") == "go", "upside down: swipe up → Home")
+        local down = swipe("north", H - 20, 400)
+        check(down.direction == "south" and Reader.edgePull(down, "top") == "go", "upside down: swipe down → quick panel")
+        check(Reader.edgePull(swipe("south", 800, 400), "bottom") == nil, "upside down: mid-page swipe is not an edge pull")
+        check(Reader.edgePull(swipe("south", 20, 60), "bottom") == "wait", "upside down: short pull waits")
+        -- a slow drag (pan) on a page like Settings: start worked out from pos − relative
+        local pan = fake:adjustGesCoordinate{ ges = "pan", direction = "south", distance = 400,
+            relative = { x = 0, y = 400 }, pos = Geom:new{ x = 600, y = 420 }, start_pos = Geom:new{ x = 600, y = 20 } }
+        local page = { swipe_home = true, dimen = { h = H } }
+        local start = pan.pos.y - pan.relative.y
+        check(Page.fromBottomEdge(page, start) and pan.relative.y <= -Theme.px(Page.PULL),
+            "upside down: pan up from the bottom edge of a page → Home")
+        local pan2 = fake:adjustGesCoordinate{ ges = "pan", direction = "north", distance = 400,
+            relative = { x = 0, y = -400 }, pos = Geom:new{ x = 600, y = H - 420 }, start_pos = Geom:new{ x = 600, y = H - 20 } }
+        check(Page.fromTopEdge(page, pan2.pos.y - pan2.relative.y) and pan2.relative.y >= Theme.px(Page.PULL),
+            "upside down: pan down from the top edge of a page → quick panel")
+    else
+        print("(gesture detector not loadable here: rotation check skipped)", GD)
+    end
+end
+
 print(failed == 0 and "reader hooks OK" or (failed .. " checks failed"))
 os.exit(failed == 0 and 0 or 1)
