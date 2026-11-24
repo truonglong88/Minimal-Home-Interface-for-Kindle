@@ -46,7 +46,8 @@ function MinimalHome:init()
     pcall(function() require("mh/messages").install() end)
     -- low battery warnings (20 %: snackbar, 5 %: popup)
     pcall(function() require("mh/battery").start() end)
-    pcall(function() require("mh/device").followHeldRotation(self.ui) end)
+    -- (keeping the held rotation, 0.1.63, is switched off: touch went wrong on the
+    -- device with it; back to KOReader's own rotation until that is understood)
     if isFileManager(self.ui) then
         -- the screen turns upside down with the device, never sideways
         pcall(function() require("mh/device").keepPortraitRotation(self.ui) end)
