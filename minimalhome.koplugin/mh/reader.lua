@@ -166,55 +166,34 @@ function Header.getSize(_)
     return Geom:new{ w = 0, h = 0 }
 end
 
--- The page is only redrawn on page turns, so the clock in the top bar would
--- stand still while reading one page, and show the old time after waking up.
--- Redraw just the top strip on every minute change and on resume.
-local clock = { ui = nil, tick = nil }
+-- The clock in the top bar (and the % at the bottom) move on with the page turns
+-- only: nothing wakes the reader up every minute, to save power. Waking up from
+-- sleep redraws the top strip so the time is right straight away.
+local clock = { ui = nil }
 
 function Reader.refreshClock()
     local ui = clock.ui
     if not (ui and ui.document and Prefs.get("reader_style")) then return end
     if not ui.rolling then return end -- PDF, CBZ: no clock to redraw
-    -- comics: the clock over the picture moves on with the page turns only, so the
-    -- whole picture is not drawn again every minute (waking up redraws it anyway)
-    if ui._minimalhome_comic then return end
+    if ui._minimalhome_comic then return end -- (waking up redraws the whole picture anyway)
     local UIManager = require("ui/uimanager")
     local Screen = require("device").screen
     UIManager:setDirty(ui, "ui", Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Theme.px(110) })
 end
 
 function Reader.stopClock()
-    if clock.tick then require("ui/uimanager"):unschedule(clock.tick) end
-    clock.ui, clock.tick = nil, nil
-end
-
-local function scheduleClock()
-    if not clock.tick then return end
-    local UIManager = require("ui/uimanager")
-    UIManager:unschedule(clock.tick)
-    local sec = tonumber(os.date("%S")) or 0
-    UIManager:scheduleIn(60 - sec + 0.2, clock.tick)
+    clock.ui = nil
 end
 
 function Reader.startClock(ui)
-    Reader.stopClock()
     clock.ui = ui
-    clock.tick = function()
-        Reader.refreshClock()
-        scheduleClock()
-    end
-    scheduleClock()
 end
 
 function Reader.onResume()
-    if not clock.ui then return end
-    Reader.refreshClock()
-    scheduleClock()
+    if clock.ui then Reader.refreshClock() end
 end
 
-function Reader.onSuspend()
-    if clock.tick then require("ui/uimanager"):unschedule(clock.tick) end
-end
+function Reader.onSuspend() end -- (no timer to stop)
 
 local function secondsPerPage(ui)
     local st = ui.statistics
