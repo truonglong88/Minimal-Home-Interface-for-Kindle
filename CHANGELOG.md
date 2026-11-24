@@ -7,7 +7,8 @@ next push.
 
 - Comic mode (EPUB, MOBI and CBZ) shows the clock at the top left and the % of
   the book at the bottom right again, on small white labels laid over the
-  picture. The picture keeps the whole screen; the clock updates every minute.
+  picture. The picture keeps the whole screen. To save power, both change only
+  when you turn the page (and on waking up), not every minute.
 - Comic mode for picture-only EPUB, MOBI, AZW3 and FB2: no clock, no status
   line, no margins; each picture fills the screen and one tap turns one comic
   page. Found by looking at 10 pages spread through the book (once per book);
