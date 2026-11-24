@@ -282,6 +282,82 @@ local function hookBlankPages(ui)
 end
 Comic.hookBlankPages = hookBlankPages
 
+-- Clock (top left) and % of the book (bottom right) on small white labels laid
+-- over the picture, at the same place and size as on a text page. The picture
+-- keeps the whole screen: nothing moves.
+Comic.OVERLAY = {
+    clock = { x = 72, y = 26, h = 60, size = 36 },
+    pct = { right = 81, bottom = 21, h = 59, size = 32 },
+    pad = 16, radius = 10,
+}
+
+--- "38%" for the page on screen, or nil.
+function Comic.percent(ui)
+    local doc = ui.document
+    local page, total
+    pcall(function()
+        total = doc:getPageCount()
+        if ui.paging and ui.paging.current_page and ui.paging.current_page > 0 then
+            page = ui.paging.current_page
+        elseif doc.getCurrentPage then
+            page = doc:getCurrentPage()
+        end
+    end)
+    if not page or not total or total <= 0 then return nil end
+    return string.format("%d%%", math.floor(page / total * 100 + 0.5))
+end
+
+local function label(str, size, h, col)
+    local Blitbuffer = require("ffi/blitbuffer")
+    local Theme = require("mh/theme")
+    local C = require("mh/ui/components")
+    local O = Comic.OVERLAY
+    local text = C.text(str, "sans_medium", size, col.muted)
+    local w = text:getSize().w + 2 * Theme.px(O.pad)
+    return C.box(w, Theme.px(h), text, {
+        bg = Blitbuffer.COLOR_WHITE, radius = Theme.px(O.radius),
+        halign = "center", valign = "center",
+    }), w
+end
+
+function Comic.paintOverlay(ui, bb, x, y)
+    local Theme = require("mh/theme")
+    local O = Comic.OVERLAY
+    local col = Theme.boldColors(false)
+    x, y = x or 0, y or 0
+    local W, H = bb:getWidth(), bb:getHeight()
+    local datetime = require("datetime")
+    local clock = datetime.secondsToHour(os.time(), G_reader_settings:isTrue("twelve_hour_clock"))
+    local top = label(clock, O.clock.size, O.clock.h, col)
+    top:paintTo(bb, x + Theme.px(O.clock.x), y + Theme.px(O.clock.y))
+    top:free()
+    local pct = Comic.percent(ui)
+    if pct then
+        local box, w = label(pct, O.pct.size, O.pct.h, col)
+        box:paintTo(bb, x + W - Theme.px(O.pct.right) - w, y + H - Theme.px(O.pct.bottom) - Theme.px(O.pct.h))
+        box:free()
+    end
+end
+
+--- Put the labels on top of every page drawn. Installed last (when the book is
+--- ready), so the blank-page check underneath never sees them.
+function Comic.hookOverlay(ui)
+    local view = ui and ui.view
+    if not view or view._minimalhome_overlay_hook then return end
+    view._minimalhome_overlay_hook = true
+    local orig = view.paintTo
+    view.paintTo = function(self, bb, x, y)
+        orig(self, bb, x, y)
+        if not ui._minimalhome_comic or ui._minimalhome_skip_pending or not alive(ui) then return end
+        if not require("mh/data/prefs").get("reader_style") then return end
+        local ok, err = pcall(Comic.paintOverlay, ui, bb, x, y)
+        if not ok and not ui._minimalhome_overlay_warned then
+            ui._minimalhome_overlay_warned = true
+            logger.warn("MinimalHome: comic overlay:", err)
+        end
+    end
+end
+
 -- Our CSS goes after KOReader's style tweaks, for this book only.
 local function hookCss(ui)
     local st = ui.styletweak
@@ -358,6 +434,7 @@ end
 
 --- A book has opened: decide (once) and show it the right way.
 function Comic.onReady(ui)
+    pcall(Comic.hookOverlay, ui)
     if ui and ui.paging and settings(ui) then
         if Comic.isOn(ui) then
             ui._minimalhome_comic = nil -- (prepare only hid the status line)

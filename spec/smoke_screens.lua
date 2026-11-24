@@ -875,6 +875,36 @@ check("comic mode: found by sampling, full screen, Auto / On / Off", function()
     local pdf, ev8 = pagingUI("/mnt/us/documents/manual.pdf")
     Comic.prepare(pdf); Comic.onReady(pdf)
     assert(#ev8 == 0 and pdf.view.footer.mode == 1, "PDF untouched")
+    -- clock and % of the book on white labels over the picture
+    local Blitbuffer = require("ffi/blitbuffer")
+    local Prefs = require("mh/data/prefs")
+    local was_style = Prefs.get("reader_style")
+    Prefs.set("reader_style", true)
+    local ov = { paging = { current_page = 19 }, _minimalhome_comic = true,
+        document = { _document = {}, getPageCount = function() return 50 end },
+        view = { paintTo = function(_, b) b:fill(Blitbuffer.COLOR_BLACK) end } }
+    assert(Comic.percent(ov) == "38%", tostring(Comic.percent(ov)))
+    Comic.hookOverlay(ov)
+    local ops = Blitbuffer._ops
+    local bb = setmetatable({ w = 1264, h = 1680 }, getmetatable(Blitbuffer.new(1, 1)))
+    bb.offscreen, bb._list = nil, nil
+    ops.reset(); ov.view:paintTo(bb, 0, 0)
+    local white_rects, texts = {}, {}
+    for _, op in ipairs(ops.list()) do
+        if op[1] == "rect" and op[6] == 0 and (op[7] or 0) > 0 then white_rects[#white_rects + 1] = op end
+        if op[1] == "text" then texts[#texts + 1] = op end
+    end
+    assert(#white_rects == 2, "two white labels: " .. #white_rects)
+    local tl, br = white_rects[1], white_rects[2]
+    assert(tl[2] == 72 and tl[3] == 26 and tl[5] == 60, "clock label top left")
+    assert(br[2] + br[4] == 1264 - 81 and br[3] + br[5] == 1680 - 21, "% label bottom right")
+    local found = false
+    for _, t in ipairs(texts) do if tostring(t[4]):find("38%%") then found = true end end
+    assert(found or #texts >= 2, "label text drawn")
+    ov._minimalhome_comic = false
+    ops.reset(); ov.view:paintTo(bb, 0, 0)
+    for _, op in ipairs(ops.list()) do assert(not (op[1] == "rect" and op[6] == 0 and (op[7] or 0) > 0), "no labels when off") end
+    Prefs.set("reader_style", was_style)
 end)
 
 check("Folders view: folder rows, order inside a folder, folder page", function()

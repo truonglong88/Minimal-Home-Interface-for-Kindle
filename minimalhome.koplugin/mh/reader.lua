@@ -173,7 +173,8 @@ local clock = { ui = nil, tick = nil }
 
 function Reader.refreshClock()
     local ui = clock.ui
-    if not (ui and ui.document and ui.rolling and Prefs.get("reader_style")) then return end
+    if not (ui and ui.document and Prefs.get("reader_style")) then return end
+    if not (ui.rolling or ui._minimalhome_comic) then return end -- PDF: no clock to redraw
     local UIManager = require("ui/uimanager")
     local Screen = require("device").screen
     UIManager:setDirty(ui, "ui", Geom:new{ x = 0, y = 0, w = Screen:getWidth(), h = Theme.px(110) })
@@ -515,6 +516,8 @@ function Reader.attach(ui)
         if ui.rolling and view and view.registerViewModule then
             view:registerViewModule("minimalhome_header", Header:new{ ui = ui })
             Reader.startClock(ui)
+        elseif ui.paging then
+            Reader.startClock(ui) -- comic archives: the clock over the picture
         end
 
         local footer = view and view.footer

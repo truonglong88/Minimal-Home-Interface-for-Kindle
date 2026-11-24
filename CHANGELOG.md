@@ -5,6 +5,9 @@
 Changes made since the last push to GitHub. They get the plugin version of the
 next push.
 
+- Comic mode (EPUB, MOBI and CBZ) shows the clock at the top left and the % of
+  the book at the bottom right again, on small white labels laid over the
+  picture. The picture keeps the whole screen; the clock updates every minute.
 - Comic mode for picture-only EPUB, MOBI, AZW3 and FB2: no clock, no status
   line, no margins; each picture fills the screen and one tap turns one comic
   page. Found by looking at 10 pages spread through the book (once per book);
