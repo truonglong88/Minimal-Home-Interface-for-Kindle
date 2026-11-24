@@ -10,7 +10,7 @@ next push.
   upright. Home and books now keep the way the Kindle is held.
 - Comic mode (EPUB, MOBI and CBZ) shows the clock at the top left and the % of
   the book at the bottom right again, on small white labels laid over the
-  picture. The picture keeps the whole screen.
+  picture, pushed right against the left and right edges. The picture keeps the whole screen.
 - To save power, the clock while reading (text books and comics) changes only
   when you turn the page or wake the Kindle up, no longer every minute.
 - Comic mode for picture-only EPUB, MOBI, AZW3 and FB2: no clock, no status

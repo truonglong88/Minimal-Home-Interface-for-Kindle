@@ -896,8 +896,8 @@ check("comic mode: found by sampling, full screen, Auto / On / Off", function()
     end
     assert(#white_rects == 2, "two white labels: " .. #white_rects)
     local tl, br = white_rects[1], white_rects[2]
-    assert(tl[2] == 72 and tl[3] == 26 and tl[5] == 60, "clock label top left")
-    assert(br[2] + br[4] == 1264 - 81 and br[3] + br[5] == 1680 - 21, "% label bottom right")
+    assert(tl[2] == 0 and tl[3] == 26 and tl[5] == 60, "clock label top left")
+    assert(br[2] + br[4] == 1264 and br[3] + br[5] == 1680 - 21, "% label bottom right")
     local found = false
     for _, t in ipairs(texts) do if tostring(t[4]):find("38%%") then found = true end end
     assert(found or #texts >= 2, "label text drawn")

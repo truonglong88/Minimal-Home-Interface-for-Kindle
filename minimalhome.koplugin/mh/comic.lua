@@ -283,11 +283,12 @@ end
 Comic.hookBlankPages = hookBlankPages
 
 -- Clock (top left) and % of the book (bottom right) on small white labels laid
--- over the picture, at the same place and size as on a text page. The picture
+-- over the picture, pushed against the side edges, at the same height and size
+-- as on a text page. The picture
 -- keeps the whole screen: nothing moves.
 Comic.OVERLAY = {
-    clock = { x = 72, y = 26, h = 60, size = 36 },
-    pct = { right = 81, bottom = 21, h = 59, size = 32 },
+    clock = { x = 0, y = 26, h = 60, size = 36 },     -- right against the left edge
+    pct = { right = 0, bottom = 21, h = 59, size = 32 }, -- right against the right edge
     pad = 16, radius = 10,
 }
 
