@@ -46,8 +46,9 @@ function MinimalHome:init()
     pcall(function() require("mh/messages").install() end)
     -- low battery warnings (20 %: snackbar, 5 %: popup)
     pcall(function() require("mh/battery").start() end)
-    -- (keeping the held rotation, 0.1.63, is switched off: touch went wrong on the
-    -- device with it; back to KOReader's own rotation until that is understood)
+    pcall(function() require("mh/rotlog").install() end)
+    require("mh/rotlog").log(isFileManager(self.ui) and "plugin init (file manager)" or "plugin init (book)")
+    pcall(function() require("mh/device").followHeldRotation(self.ui) end)
     if isFileManager(self.ui) then
         -- the screen turns upside down with the device, never sideways
         pcall(function() require("mh/device").keepPortraitRotation(self.ui) end)
@@ -72,6 +73,7 @@ end
 
 function MinimalHome:showHome()
     if self.home or not isFileManager(self.ui) or not self.ui.file_chooser then return end
+    require("mh/rotlog").log("Home shown")
     local ok, err = pcall(function()
         local Home = require("mh/ui/home")
         self.home = Home:new{
@@ -112,6 +114,7 @@ end
 
 function MinimalHome:onReaderReady()
     require("mh/loadingbar").done()
+    require("mh/rotlog").log(isFileManager(self.ui) and "ready (file manager)" or "book ready")
     if not isFileManager(self.ui) then
         require("mh/reader").styleBook(self.ui)
         require("mh/reader").reassertZones(self.ui)
@@ -132,6 +135,7 @@ end
 
 -- KOReader is about to close the document (before the widget goes): stop first.
 function MinimalHome:onCloseDocument()
+    require("mh/rotlog").log("book closing")
     if not isFileManager(self.ui) then pcall(function() require("mh/comic").stop(self.ui) end) end
 end
 

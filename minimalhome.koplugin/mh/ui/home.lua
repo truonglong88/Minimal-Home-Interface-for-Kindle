@@ -1109,6 +1109,7 @@ end
 -- browser underneath and lay ourselves out again for the new screen size.
 function Home:onSetRotationMode(mode)
     if mode == nil then return true end
+    require("mh/rotlog").log("Home turned", mode)
     if self.ui and self.ui.onSetRotationMode then
         self.ui:onSetRotationMode(mode)
     elseif mode ~= Screen:getRotationMode() then
